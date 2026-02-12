@@ -1,0 +1,31 @@
+{
+	"name": "Webmail Microservice",
+	"image": "mcr.microsoft.com/devcontainers/python:3",
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"hashicorp.terraform",
+				"ms-azuretools.vscode-docker",
+				"mongodb.mongodb-vscode",
+				"editorconfig.editorconfig",
+				"google.geminicodeassist",
+				"GitHub.copilot-chat"
+			]
+		}
+	},
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2.5.6": {
+			"installZsh": true,
+			"configureZshAsDefaultShell": true
+		},
+		"ghcr.io/devcontainers/features/terraform:1": {},
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+			"moby": false
+		}
+	},
+	"forwardPorts": [8080, 587, 993],
+	"postCreateCommand": "pip install -r requirements.txt",
+	"remoteUser": "vscode"
+}

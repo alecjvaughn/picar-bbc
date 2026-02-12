@@ -1,0 +1,8 @@
+_temp_
+node_modules/
+infrastructure/.terraform/
+infrastructure/.terraform.lock.hcl
+infrastructure/secrets
+.env*
+*.tfstate
+*.tfstate.*
