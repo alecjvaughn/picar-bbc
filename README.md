@@ -17,6 +17,7 @@ This project provides a client-server architecture for controlling the Freenove 
 - **Software**:
   - Docker Desktop (or Docker Engine on Linux).
   - `make` (for build automation).
+  - `terraform` (Optional: Can be installed on your computer instead of the Pi).
   - **macOS Users**: XQuartz is required for the GUI client in Docker.
 
 ## Raspberry Pi Setup (From Scratch)
@@ -53,7 +54,7 @@ sudo reboot
 ```
 
 ### 3. Install Dependencies
-Install Docker, Git, Make, and Terraform:
+Install Docker, Git, and Make:
 
 ```bash
 # Install Docker
@@ -64,21 +65,12 @@ sudo usermod -aG docker $USER
 # Install Git and Make
 sudo apt install -y git make
 
-# (Optional) Install Terraform for 'make up' workflow
-sudo apt-get install -y gnupg software-properties-common
-wget -O- https://apt.releases.hashicorp.com/gpg | \
-gpg --dearmor | \
-sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
-https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
-sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update && sudo apt install terraform
-```
-
 **Log out and log back in** to apply the Docker group changes.
 
 ### 4. Automated Setup (Ansible)
 Alternatively, you can use Ansible to automate the setup and deployment from your computer.
+
+**Note**: Ansible is **agentless**. You do NOT need to install Ansible on the Raspberry Pi. It only needs to be installed on your computer (Control Node).
 
 1.  Install Ansible on your control computer.
 2.  Edit `ansible/inventory.ini` with your Pi's IP address or hostname.
@@ -143,6 +135,70 @@ If you prefer to run without Docker (e.g., for direct hardware access on the Pi 
     ```bash
     make run-client
     ```
+
+## Remote Deployment (Advanced)
+
+You can run Terraform and Make on your computer and deploy to the Pi remotely. This allows you to keep your Pi clean (only Docker required) and run all build/deploy commands (`make up`) from your computer.
+
+1.  **Configure SSH**: Ensure you can SSH into the Pi without a password (use SSH keys).
+2.  **Set Context**: On your computer, point Docker to the Pi:
+
+    ```bash
+    export DOCKER_HOST=ssh://pi@picar.local
+    ```
+
+3.  **Deploy**:
+
+    ```bash
+    make up
+    ```
+
+This sends the build context to the Pi, builds images on the Pi, and starts containers on the Pi.
+
+### How this works
+1.  **`export DOCKER_HOST=ssh://pi@picar.local`**: This environment variable tells both the `docker` CLI and Terraform (via the `kreuzwerker/docker` provider) to execute commands on the remote machine instead of your local one.
+2.  **Terraform**: When you run `make up` locally, Terraform zips your source code, sends it to the Pi's Docker daemon, builds the images *on the Pi* (ensuring the correct ARM architecture), and starts the containers *on the Pi*.
+
+### Summary of what you can remove from the Pi
+*   ✅ **Terraform**: Safe to remove.
+*   ✅ **Source Code**: Safe to remove (if deploying remotely, the context is sent during build).
+*   ❌ **Docker**: **Must keep.** It is the engine running your robot.
+
+## Connecting to the Server
+
+Based on your project configuration, there are two main ways to reach your picar-server, depending on whether you are on the same Wi-Fi network or connecting remotely.
+
+### 1. Local Network Access (Same Wi-Fi)
+If your computer and the Raspberry Pi are on the same network, you can connect directly using the Pi's IP address or hostname.
+
+- **Hostname**: `picar.local` (Assuming you followed the README setup)
+- **Control Port (TCP)**: `5000`
+- **Video Stream (MJPEG)**: `8000`
+
+**URLs**:
+- Control API: `http://picar.local:5000`
+- Video Feed: `http://picar.local:8000`
+
+*(If `picar.local` doesn't work, find your Pi's IP address using `hostname -I` on the Pi and use that instead, e.g., `http://192.168.1.15:5000`)*
+
+### 2. Remote Access (Cloudflare Tunnel)
+If you have deployed the Cloudflare Tunnel using `make docker-run-tunnel` or `make up`, you can access the robot from anywhere on the internet without being on the same Wi-Fi.
+
+- **URL**: This is the Public Hostname you configured in your Cloudflare Zero Trust Dashboard (e.g., `https://robot.yourdomain.com`).
+- **Configuration**: Ensure your Cloudflare Tunnel "Service" is pointing to `http://picar-server:8000` (for video) or `http://picar-server:5000` (for control) inside the dashboard settings.
+
+### 3. Using the Client Application
+To control the robot using the desktop GUI client:
+
+1.  Run the client on your computer:
+    ```bash
+    make run-client
+    # OR if you don't have Python installed locally:
+    make docker-run-client
+    ```
+2.  In the client interface, look for the **IP/Host** field.
+    -   **Local**: Enter `picar.local` or the IP address.
+    -   **Remote**: Enter your Cloudflare domain (e.g., `robot.yourdomain.com`).
 
 ## Project Structure
 

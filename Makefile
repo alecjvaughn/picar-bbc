@@ -186,6 +186,12 @@ ansible-ping:
 	ansible -i ansible/inventory.ini picar -m ping
 
 ansible-deploy:
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "Error: 'ansible-playbook' is not installed."; \
+		echo "  - If running from your computer: Install Ansible (e.g., 'brew install ansible')."; \
+		echo "  - If running on the Pi: Install Ansible ('sudo apt install ansible')."; \
+		exit 1; \
+	fi
 	@if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
 		ansible-playbook -i ansible/inventory.ini ansible/playbook.yml -e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"; \
 	else \
