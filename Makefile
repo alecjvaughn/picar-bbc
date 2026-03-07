@@ -54,6 +54,10 @@ help:
 	@echo "  make debug-server        : Run server in foreground"
 	@echo "  make logs                : View server logs"
 	@echo ""
+	@echo "Ansible Workflow:"
+	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
+	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
+	@echo ""
 	@echo "Local Development:"
 	@echo "  make venv                : Create/Update virtual environment"
 	@echo "  make install             : Install dependencies to venv"
@@ -166,6 +170,22 @@ docker-clean: docker-down
 
 logs:
 	docker logs -f $(SERVER_NAME)
+
+# ==============================================================================
+# Ansible Workflow
+# ==============================================================================
+
+.PHONY: ansible-ping ansible-deploy
+
+ansible-ping:
+	ansible -i ansible/inventory.ini picar -m ping
+
+ansible-deploy:
+	@if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
+		ansible-playbook -i ansible/inventory.ini ansible/playbook.yml -e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"; \
+	else \
+		ansible-playbook -i ansible/inventory.ini ansible/playbook.yml; \
+	fi
 
 # ==============================================================================
 # Local Development

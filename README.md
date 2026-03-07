@@ -77,6 +77,22 @@ sudo apt update && sudo apt install terraform
 
 **Log out and log back in** to apply the Docker group changes.
 
+### 4. Automated Setup (Ansible)
+Alternatively, you can use Ansible to automate the setup and deployment from your computer.
+
+1.  Install Ansible on your control computer.
+2.  Edit `ansible/inventory.ini` with your Pi's IP address or hostname.
+3.  Run the playbook:
+
+```bash
+# Basic setup and server deployment
+ansible-playbook ansible/playbook.yml
+
+# With Cloudflare Tunnel
+export CLOUDFLARED_TUNNEL_TOKEN="your-token"
+ansible-playbook ansible/playbook.yml
+```
+
 ## Quick Start (Docker)
 
 The easiest way to run the application is using the provided `Makefile` and Docker.
@@ -135,6 +151,7 @@ If you prefer to run without Docker (e.g., for direct hardware access on the Pi 
 - **`src/Libs/`**: Custom libraries (e.g., `rpi_ws281x`).
 - **`docker/`**: Dockerfiles for Root, Middleware, Server, and Client images.
 - **`infrastructure/`**: Terraform configuration for local Docker resource management.
+- **`ansible/`**: Ansible playbooks for automated Raspberry Pi configuration and deployment.
 
 ## Cloudflare Tunnel Implementation
 
