@@ -1,3 +1,10 @@
+variable "tunnel_token" {
+  description = "Cloudflare Tunnel Token"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # 1. Build the Root Image (Level 1)
 resource "docker_image" "root_base" {
   name = "local/root_base:latest"
@@ -26,6 +33,16 @@ resource "docker_image" "picar_server" {
     dockerfile = "/docker/images/server/Dockerfile"
   }
   # Ensure Middleware is built first
+  depends_on = [docker_image.python_middleware]
+}
+
+# Build the Client Image (Level 3)
+resource "docker_image" "picar_client" {
+  name = "local/picar-client:latest"
+  build {
+    context    = ".."
+    dockerfile = "/docker/images/client/Dockerfile"
+  }
   depends_on = [docker_image.python_middleware]
 }
 
@@ -69,4 +86,21 @@ resource "docker_container" "app_service" {
 # Output the correct URL for easy access
 output "application_url" {
   value = "http://localhost:5000"
+}
+
+resource "docker_container" "tunnel_service" {
+  count   = var.tunnel_token != "" ? 1 : 0
+  name    = "picar_tunnel"
+  image   = docker_image.picar_server.image_id
+  restart = "unless-stopped"
+
+  networks_advanced {
+    name = docker_network.data_platform.name
+  }
+
+  env = [
+    "TUNNEL_TOKEN=${var.tunnel_token}"
+  ]
+
+  command = ["cloudflared", "tunnel", "run"]
 }

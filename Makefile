@@ -1,77 +1,97 @@
-# Use bash for shell commands to support process substitution <(...)
+# Use bash for shell commands
 SHELL := /bin/bash
 
+# ==============================================================================
 # Variables
+# ==============================================================================
+
+# Infrastructure
 TF_DIR := infrastructure
-SERVER_NAME := picar-server
-CLIENT_NAME := picar-client
+
+# Docker Names
+SERVER_NAME       := picar-server
+CLIENT_NAME       := picar-client
 DEBUG_SERVER_NAME := picar-server-debug
-SERVER_IMAGE := local/picar-server:latest
-CLIENT_IMAGE := local/picar-client:latest
+TUNNEL_NAME       := picar-tunnel
+
+# Docker Images
+ROOT_IMAGE       := local/root_base:latest
 MIDDLEWARE_IMAGE := local/python_middleware:latest
-ROOT_IMAGE := local/root_base:latest
-PORTS := -p 5000:5000 -p 8000:8000
+SERVER_IMAGE     := local/picar-server:latest
+CLIENT_IMAGE     := local/picar-client:latest
+
+# Networking
 NETWORK_NAME := picar-net
+PORTS        := -p 5000:5000 -p 8000:8000
+
+# Configuration
 CLOUDFLARED_TUNNEL_TOKEN ?=
+BUILD_ARGS ?=
 
-.PHONY: help up down reload logs tf-init docker-up docker-down docker-clean clean-install docker-rebuild venv venv-cleanup tf-clean run-server run-client install rebuild-hardware debug-server x11-setup docker-build
+# ==============================================================================
+# Help
+# ==============================================================================
 
+.PHONY: help
 help:
-	@echo "Usage:"
-	@echo "  make up          : Start the application using Terraform (Preferred)"
-	@echo "  make down        : Destroy infrastructure and clean up images"
-	@echo "  make reload      : Rebuild the app image and restart (Terraform)"
-	@echo "  make tf-clean    : Remove Terraform state and lock files"
-	@echo "  make logs        : View container logs"
-	@echo "  make docker-up   : Build and run using Docker commands (Alternative)"
-	@echo "  make docker-down : Stop and remove Docker container"
-	@echo "  make docker-run-server : Run the server container"
-	@echo "  make debug-server      : Run the server container in debug mode (foreground)"
-	@echo "  make docker-run-client : Run the client container"
-	@echo "  make docker-run-tunnel : Run the Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN=...)"
-	@echo "  make clean-install : Clean node_modules and reinstall dependencies"
-	@echo "  make venv        : Create a local Python virtual environment for testing"
-	@echo "  make venv-cleanup  : Remove the local Python virtual environment"
-	@echo "  make install     : Install dependencies into existing venv"
-	@echo "  make rebuild-hardware : Attempt to rebuild/reinstall hardware libraries"
-	@echo "  make run-server  : Run the server locally (headless)"
-	@echo "  make run-client  : Run the client locally"
+	@echo "--------------------------------------------------------------------------------"
+	@echo "Picar-BBC Makefile"
+	@echo "--------------------------------------------------------------------------------"
+	@echo "Terraform Workflow (Preferred):"
+	@echo "  make up                  : Provision infrastructure (Builds images, starts containers)"
+	@echo "  make down                : Destroy infrastructure"
+	@echo "  make reload              : Taint server image and apply (Hot reload)"
+	@echo "  make tf-clean            : Clean Terraform state"
+	@echo ""
+	@echo "Docker Manual Workflow:"
+	@echo "  make docker-build        : Build all Docker images"
+	@echo "  make docker-rebuild      : Rebuild all Docker images (no cache)"
+	@echo "  make docker-up           : Alias for docker-run-server"
+	@echo "  make docker-down         : Stop and remove all manual containers"
+	@echo "  make docker-run-server   : Run server container manually"
+	@echo "  make docker-run-client   : Run client container manually"
+	@echo "  make docker-run-tunnel   : Run Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN)"
+	@echo "  make debug-server        : Run server in foreground"
+	@echo "  make logs                : View server logs"
+	@echo ""
+	@echo "Local Development:"
+	@echo "  make venv                : Create/Update virtual environment"
+	@echo "  make install             : Install dependencies to venv"
+	@echo "  make run-server          : Run server locally"
+	@echo "  make run-client          : Run client locally"
+	@echo "  make clean-install       : Clean node_modules (if applicable) and reinstall"
+	@echo "--------------------------------------------------------------------------------"
 
-# --- Terraform Workflow (Preferred) ---
+# ==============================================================================
+# Terraform Workflow
+# ==============================================================================
+
+.PHONY: tf-init up down reload tf-clean
 
 tf-init:
 	cd $(TF_DIR) && terraform init
 
 up: tf-init
-	cd $(TF_DIR) && terraform apply -auto-approve
+	cd $(TF_DIR) && terraform apply -auto-approve -var="tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"
 
-# Thorough cleanup: Destroy resources and ensure images are removed
 down:
 	cd $(TF_DIR) && terraform destroy -auto-approve
-	@echo "Cleaning up any dangling images..."
+	@echo "Cleaning up dangling images and networks..."
 	-docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) 2>/dev/null || true
 	-docker network rm data_platform_network 2>/dev/null || true
 
-# Remove Terraform state, locks, and cached plugins for a fresh start
-tf-clean:
-	rm -rf $(TF_DIR)/.terraform $(TF_DIR)/.terraform.lock.hcl $(TF_DIR)/terraform.tfstate $(TF_DIR)/terraform.tfstate.backup
-
-# Clean node_modules and reinstall dependencies locally
-clean-install:
-	rm -rf node_modules package-lock.json
-	npm install
-
-# Force rebuild of the application image without destroying network/base images
 reload:
 	cd $(TF_DIR) && terraform taint docker_image.picar_server
 	cd $(TF_DIR) && terraform apply -auto-approve
 
-logs:
-	docker logs -f $(SERVER_NAME)
+tf-clean:
+	rm -rf $(TF_DIR)/.terraform $(TF_DIR)/.terraform.lock.hcl $(TF_DIR)/terraform.tfstate $(TF_DIR)/terraform.tfstate.backup
 
-# --- Docker Manual Workflow (Alternative) ---
+# ==============================================================================
+# Docker Manual Workflow
+# ==============================================================================
 
-BUILD_ARGS ?=
+.PHONY: docker-build docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean logs
 
 docker-build:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
@@ -127,7 +147,7 @@ docker-run-tunnel: docker-build create-network
 		echo "Error: CLOUDFLARED_TUNNEL_TOKEN is not set. Usage: make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=<your-token>"; \
 		exit 1; \
 	fi
-	docker run --rm -d --name picar-tunnel --restart unless-stopped \
+	docker run --rm -d --name $(TUNNEL_NAME) --restart unless-stopped \
 		--network $(NETWORK_NAME) \
 		-e TUNNEL_TOKEN=$(CLOUDFLARED_TUNNEL_TOKEN) \
 		$(SERVER_IMAGE) cloudflared tunnel run
@@ -135,18 +155,33 @@ docker-run-tunnel: docker-build create-network
 docker-up: docker-run-server
 
 docker-down:
-	docker stop $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) picar-tunnel || true
-	docker rm $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) picar-tunnel || true
+	docker stop $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) $(TUNNEL_NAME) || true
+	docker rm $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) $(TUNNEL_NAME) || true
 
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
+
+logs:
+	docker logs -f $(SERVER_NAME)
+
+# ==============================================================================
+# Local Development
+# ==============================================================================
+
+.PHONY: clean-install install rebuild-hardware venv venv-cleanup run-server run-client
+
+clean-install:
+	rm -rf node_modules package-lock.json
+	npm install
 
 install:
 	@echo "Installing requirements into venv..."
 	@. venv/bin/activate && pip install --upgrade pip
 	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
 		echo "Raspberry Pi detected. Installing requirements, excluding those provided by apt..."; \
-		. venv/bin/activate && pip install -r <(grep -v -e "PyQt5" -e "numpy" -e "gpiozero" src/requirements.txt); \
+		grep -v -e "PyQt5" -e "numpy" -e "gpiozero" src/requirements.txt > requirements.tmp; \
+		. venv/bin/activate && pip install -r requirements.tmp; \
+		rm requirements.tmp; \
 	else \
 		echo "Non-RPi OS detected. Installing all requirements..."; \
 		. venv/bin/activate && pip install -r src/requirements.txt; \
