@@ -1,3 +1,6 @@
+# Use bash for shell commands to support process substitution <(...)
+SHELL := /bin/bash
+
 # Variables
 TF_DIR := infrastructure
 SERVER_NAME := picar-server
