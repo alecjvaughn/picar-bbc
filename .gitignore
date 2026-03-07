@@ -6,3 +6,11 @@ infrastructure/secrets
 .env*
 *.tfstate
 *.tfstate.*
+__pycache__/
+*.pyc
+venv/
+.DS_Store
+IP.txt
+params.json
+video.jpg
+*.bak

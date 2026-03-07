@@ -16,3 +16,4 @@ RUN groupadd -r pipeline && useradd -r -g pipeline secureuser
 
 # 4. Set global working directory
 WORKDIR /app
+RUN chown secureuser:pipeline /app

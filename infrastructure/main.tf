@@ -19,11 +19,11 @@ resource "docker_image" "python_middleware" {
 }
 
 # 3. Build the Application Image (Level 3)
-resource "docker_image" "my_app" {
-  name = "local/my-app:latest"
+resource "docker_image" "picar_server" {
+  name = "local/picar-server:latest"
   build {
     context    = ".."
-    dockerfile = "/docker/images/app/Dockerfile"
+    dockerfile = "/docker/images/server/Dockerfile"
   }
   # Ensure Middleware is built first
   depends_on = [docker_image.python_middleware]
@@ -37,7 +37,7 @@ resource "docker_network" "data_platform" {
 # 4. Deploy the Container
 resource "docker_container" "app_service" {
   name  = "production_service"
-  image = docker_image.my_app.image_id
+  image = docker_image.picar_server.image_id
 
   # Network configuration for communicating with other services (e.g., Kafka/MinIO)
   networks_advanced {
@@ -57,12 +57,16 @@ resource "docker_container" "app_service" {
   }
 
   ports {
-    internal = 8080
-    external = 8080
+    internal = 5000
+    external = 5000
+  }
+  ports {
+    internal = 8000
+    external = 8000
   }
 }
 
 # Output the correct URL for easy access
 output "application_url" {
-  value = "http://localhost:8080"
+  value = "http://localhost:5000"
 }
