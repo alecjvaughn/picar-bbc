@@ -76,6 +76,11 @@ tf-init:
 	cd $(TF_DIR) && terraform init
 
 up: tf-init
+	@if [ -z "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
+		echo "⚠️  CLOUDFLARED_TUNNEL_TOKEN is not set. Cloudflare Tunnel will be SKIPPED (or destroyed if it exists)."; \
+	else \
+		echo "✅  CLOUDFLARED_TUNNEL_TOKEN found. Cloudflare Tunnel will be deployed."; \
+	fi
 	@echo "Ensuring manual container is removed to prevent port conflicts..."
 	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
 	cd $(TF_DIR) && terraform apply -auto-approve -var="tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"

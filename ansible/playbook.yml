@@ -1,0 +1,110 @@
+---
+- name: Configure Picar-BBC on Raspberry Pi
+  hosts: picar
+  become: true
+  vars:
+    # Update this URL to your repository
+    repo_url: "https://github.com/your-username/picar-bbc.git"
+    project_dir: "/home/{{ ansible_user }}/picar-bbc"
+    # Pass via --extra-vars "tunnel_token=..." or set env var locally
+    tunnel_token: "{{ lookup('env', 'CLOUDFLARED_TUNNEL_TOKEN') | default('') }}"
+
+  tasks:
+    - name: Update apt cache and upgrade packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install system dependencies
+      apt:
+        name:
+          - git
+          - make
+          - curl
+          - gnupg
+          - software-properties-common
+          - python3-pip
+          - python3-venv
+        state: present
+
+    - name: Install Docker
+      shell: curl -fsSL https://get.docker.com | sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Reset connection to apply group changes
+      meta: reset_connection
+
+    - name: Enable Hardware Interfaces (SPI, I2C)
+      lineinfile:
+        path: /boot/firmware/config.txt
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+      loop:
+        - { key: "dtparam=spi", value: "on" }
+        - { key: "dtparam=i2c_arm", value: "on" }
+        - { key: "camera_auto_detect", value: "1" }
+      notify: Reboot Pi
+
+    - name: Install Terraform (Optional)
+      block:
+        - name: Add HashiCorp GPG key
+          shell: |
+            wget -O- https://apt.releases.hashicorp.com/gpg | \
+            gpg --dearmor | \
+            tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+          args:
+            creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+        - name: Add HashiCorp repository
+          apt_repository:
+            repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+            state: present
+            filename: hashicorp
+
+        - name: Install Terraform
+          apt:
+            name: terraform
+            state: present
+
+    - name: Clone Project Repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ project_dir }}"
+        version: main
+        force: yes
+      become: false
+      ignore_errors: yes # Proceed even if repo URL is default/invalid (assuming manual copy)
+
+    - name: Ensure project directory exists
+      file:
+        path: "{{ project_dir }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Build and Run Server (Docker)
+      make:
+        chdir: "{{ project_dir }}"
+        target: docker-run-server
+      become: false
+
+    - name: Build and Run Tunnel (Docker)
+      make:
+        chdir: "{{ project_dir }}"
+        target: docker-run-tunnel
+      become: false
+      environment:
+        CLOUDFLARED_TUNNEL_TOKEN: "{{ tunnel_token }}"
+      when: tunnel_token | length > 0
+
+  handlers:
+    - name: Reboot Pi
+      reboot:
