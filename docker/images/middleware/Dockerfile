@@ -5,6 +5,8 @@ FROM local/root_base:latest AS python_middleware
 # 2. Install Runtime Dependencies
 # Install Python 3, pip, and venv (standard for Debian 12+)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
     python3 \
     python3-pip \
     python3-venv \
@@ -21,6 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb-cursor0 \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    && curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb \
+    && dpkg -i cloudflared.deb \
+    && rm cloudflared.deb \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. Environment Configuration

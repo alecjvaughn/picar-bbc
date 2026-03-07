@@ -41,6 +41,16 @@ make docker-run-client
 
 **Note for macOS**: The Makefile attempts to configure X11 forwarding automatically. Ensure XQuartz is running and "Allow connections from network clients" is enabled in XQuartz settings.
 
+### 3. Remote Access (Cloudflare Tunnel)
+To securely access the robot from outside your local network without opening ports:
+
+1.  Obtain a **Tunnel Token** from the Cloudflare Zero Trust Dashboard.
+2.  Run the tunnel container:
+
+```bash
+make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=eyJhIjoi...
+```
+
 ## Local Development
 
 If you prefer to run without Docker (e.g., for direct hardware access on the Pi or development):
@@ -67,6 +77,16 @@ If you prefer to run without Docker (e.g., for direct hardware access on the Pi 
 - **`src/Libs/`**: Custom libraries (e.g., `rpi_ws281x`).
 - **`docker/`**: Dockerfiles for Root, Middleware, Server, and Client images.
 - **`infrastructure/`**: Terraform configuration for local Docker resource management.
+
+## Cloudflare Tunnel Implementation
+
+To enable secure remote access without opening firewall ports, this project integrates Cloudflare Tunnel.
+
+- **Integration**: The `cloudflared` binary is installed in the `python_middleware` Docker image, making it available in all derived images.
+- **Architecture**: The tunnel runs in a dedicated container (`picar-tunnel`) alongside the server container (`picar-server`) on the shared Docker network (`picar-net`).
+- **Configuration**:
+  - The tunnel authenticates using a token provided via the `CLOUDFLARED_TUNNEL_TOKEN` environment variable.
+  - In the Cloudflare Dashboard, configure the tunnel service to point to `http://picar-server:8000`.
 
 ## Troubleshooting
 

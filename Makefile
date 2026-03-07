@@ -11,6 +11,8 @@ CLIENT_IMAGE := local/picar-client:latest
 MIDDLEWARE_IMAGE := local/python_middleware:latest
 ROOT_IMAGE := local/root_base:latest
 PORTS := -p 5000:5000 -p 8000:8000
+NETWORK_NAME := picar-net
+CLOUDFLARED_TUNNEL_TOKEN ?=
 
 .PHONY: help up down reload logs tf-init docker-up docker-down docker-clean clean-install docker-rebuild venv venv-cleanup tf-clean run-server run-client install rebuild-hardware debug-server x11-setup docker-build
 
@@ -26,6 +28,7 @@ help:
 	@echo "  make docker-run-server : Run the server container"
 	@echo "  make debug-server      : Run the server container in debug mode (foreground)"
 	@echo "  make docker-run-client : Run the client container"
+	@echo "  make docker-run-tunnel : Run the Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN=...)"
 	@echo "  make clean-install : Clean node_modules and reinstall dependencies"
 	@echo "  make venv        : Create a local Python virtual environment for testing"
 	@echo "  make venv-cleanup  : Remove the local Python virtual environment"
@@ -79,8 +82,12 @@ docker-build:
 docker-rebuild:
 	$(MAKE) docker-build BUILD_ARGS="--no-cache"
 
-docker-run-server: docker-build
+create-network:
+	docker network create $(NETWORK_NAME) 2>/dev/null || true
+
+docker-run-server: docker-build create-network
 	docker run --rm -d --name $(SERVER_NAME) \
+		--network $(NETWORK_NAME) \
 		$(PORTS) \
 		$(SERVER_IMAGE)
 
@@ -115,11 +122,21 @@ docker-run-client: docker-build x11-setup
 		-v /tmp/.X11-unix:/tmp/.X11-unix \
 		$(CLIENT_IMAGE)
 
+docker-run-tunnel: docker-build create-network
+	@if [ -z "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
+		echo "Error: CLOUDFLARED_TUNNEL_TOKEN is not set. Usage: make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=<your-token>"; \
+		exit 1; \
+	fi
+	docker run --rm -d --name picar-tunnel --restart unless-stopped \
+		--network $(NETWORK_NAME) \
+		-e TUNNEL_TOKEN=$(CLOUDFLARED_TUNNEL_TOKEN) \
+		$(SERVER_IMAGE) cloudflared tunnel run
+
 docker-up: docker-run-server
 
 docker-down:
-	docker stop $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) || true
-	docker rm $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) || true
+	docker stop $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) picar-tunnel || true
+	docker rm $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) picar-tunnel || true
 
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
