@@ -4,7 +4,7 @@ This project provides a client-server architecture for controlling the Freenove 
 
 ## Features
 
-- **Remote Control**: Control motors and servos via TCP/IP.
+- **Remote Control**: Control motors and servos via TCP/IP or HTTP Web API.
 - **Video Streaming**: Real-time camera feed from the Raspberry Pi.
 - **Sensor Data**: Read ultrasonic distance, light levels, and line tracking sensors.
 - **LED Control**: Control WS2812B LEDs with various animation modes.
@@ -18,6 +18,8 @@ This project provides a client-server architecture for controlling the Freenove 
   - Docker Desktop (or Docker Engine on Linux).
   - `make` (for build automation).
   - `terraform` (Optional: Can be installed on your computer instead of the Pi).
+  - `flask` (Python library, required for Web API).
+  - `flasgger` (Python library, required for Swagger UI).
   - **macOS Users**: XQuartz is required for the GUI client in Docker.
 
 ## Raspberry Pi Setup (From Scratch)
@@ -136,6 +138,12 @@ If you prefer to run without Docker (e.g., for direct hardware access on the Pi 
     make run-client
     ```
 
+4.  **Run Web API** (Optional):
+    To enable HTTP control alongside the TCP server:
+    ```bash
+    python3 src/Server/WebAPI.py
+    ```
+
 ## Remote Deployment (Advanced)
 
 You can run Terraform and Make on your computer and deploy to the Pi remotely. This allows you to keep your Pi clean (only Docker required) and run all build/deploy commands (`make up`) from your computer.
@@ -173,10 +181,13 @@ If your computer and the Raspberry Pi are on the same network, you can connect d
 
 - **Hostname**: `picar.local` (Assuming you followed the README setup)
 - **Control Port (TCP)**: `5000`
+- **Web API Port (HTTP)**: `5001`
 - **Video Stream (MJPEG)**: `8000`
 
 **URLs**:
 - Control API: `http://picar.local:5000`
+- Web API: `http://picar.local:5001/api/status`
+- Swagger UI: `http://picar.local:5001/apidocs/`
 - Video Feed: `http://picar.local:8000`
 
 *(If `picar.local` doesn't work, find your Pi's IP address using `hostname -I` on the Pi and use that instead, e.g., `http://192.168.1.15:5000`)*
@@ -199,6 +210,15 @@ To control the robot using the desktop GUI client:
 2.  In the client interface, look for the **IP/Host** field.
     -   **Local**: Enter `picar.local` or the IP address.
     -   **Remote**: Enter your Cloudflare domain (e.g., `robot.yourdomain.com`).
+
+### 4. Web API Usage
+The Web API runs on port `5001` and accepts JSON commands.
+You can explore and test the API using the Swagger UI at `/apidocs/`.
+
+- **Status**: `GET /api/status`
+- **Move**: `POST /api/move` -> `{"action": "forward" | "backward" | "left" | "right" | "stop"}`
+- **Servo**: `POST /api/servo` -> `{"id": 0, "angle": 90}` (id 0=horizontal, 1=vertical)
+- **Buzzer**: `POST /api/buzzer` -> `{"state": 1}` (1=on, 0=off)
 
 ## Project Structure
 
