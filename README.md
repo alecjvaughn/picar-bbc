@@ -19,6 +19,64 @@ This project provides a client-server architecture for controlling the Freenove 
   - `make` (for build automation).
   - **macOS Users**: XQuartz is required for the GUI client in Docker.
 
+## Raspberry Pi Setup (From Scratch)
+
+If you are setting up a new Raspberry Pi for this project, follow these steps:
+
+### 1. Install Operating System
+1.  Use Raspberry Pi Imager to flash **Raspberry Pi OS (64-bit)** (Bookworm or later) to your SD card.
+2.  In the Imager settings (gear icon), configure:
+    -   **Hostname**: `picar`
+    -   **SSH**: Enable with password authentication.
+    -   **Wi-Fi**: Enter your SSID and password.
+    -   **Username/Password**: Create your user (e.g., `pi`).
+
+### 2. Initial Configuration
+Boot the Pi and SSH into it:
+```bash
+ssh pi@picar.local
+```
+
+Update the system and enable necessary hardware interfaces:
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo raspi-config
+```
+Navigate to **Interface Options** and enable:
+*   **SPI** (Required for LEDs/Motors)
+*   **I2C** (Required for Sensors)
+*   **Camera** (If using the camera module)
+
+Reboot the Pi:
+```bash
+sudo reboot
+```
+
+### 3. Install Dependencies
+Install Docker, Git, Make, and Terraform:
+
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# Install Git and Make
+sudo apt install -y git make
+
+# (Optional) Install Terraform for 'make up' workflow
+sudo apt-get install -y gnupg software-properties-common
+wget -O- https://apt.releases.hashicorp.com/gpg | \
+gpg --dearmor | \
+sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install terraform
+```
+
+**Log out and log back in** to apply the Docker group changes.
+
 ## Quick Start (Docker)
 
 The easiest way to run the application is using the provided `Makefile` and Docker.

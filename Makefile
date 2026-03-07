@@ -72,6 +72,8 @@ tf-init:
 	cd $(TF_DIR) && terraform init
 
 up: tf-init
+	@echo "Ensuring manual container is removed to prevent port conflicts..."
+	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
 	cd $(TF_DIR) && terraform apply -auto-approve -var="tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"
 
 down:
@@ -106,6 +108,7 @@ create-network:
 	docker network create $(NETWORK_NAME) 2>/dev/null || true
 
 docker-run-server: docker-build create-network
+	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
 	docker run --rm -d --name $(SERVER_NAME) \
 		--network $(NETWORK_NAME) \
 		$(PORTS) \

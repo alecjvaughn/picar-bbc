@@ -8,5 +8,5 @@ terraform {
 }
 
 provider "docker" {
-  host = "unix:///Users/alecjvaughn/.colima/default/docker.sock" # Adjust for Windows if necessary
+  # host = "unix:///var/run/docker.sock" # Leave commented to auto-detect (works on Pi and Mac if DOCKER_HOST is set)
 }
