@@ -122,17 +122,28 @@ docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
 
 install:
-	@echo "Installing requirements..."
-	. venv/bin/activate && pip install --upgrade pip && pip install -r src/requirements.txt
-	@echo "Attempting to install hardware-specific libraries..."
-	@. venv/bin/activate && pip install rpi-ws281x || echo "Warning: rpi-ws281x failed to install. This is expected on non-RPi hardware. The application will use mocks."
+	@echo "Installing requirements into venv..."
+	@. venv/bin/activate && pip install --upgrade pip
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "Raspberry Pi detected. Installing requirements, excluding those provided by apt..."; \
+		. venv/bin/activate && pip install -r <(grep -v -e "PyQt5" -e "numpy" -e "gpiozero" src/requirements.txt); \
+	else \
+		echo "Non-RPi OS detected. Installing all requirements..."; \
+		. venv/bin/activate && pip install -r src/requirements.txt; \
+	fi
 
 rebuild-hardware:
 	@echo "Rebuilding hardware-specific libraries..."
 	@. venv/bin/activate && pip install --force-reinstall --no-cache-dir rpi-ws281x || echo "Warning: rpi-ws281x failed to build. Using mocks."
 
 venv:
-	test -d venv || python3 -m venv venv
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "Raspberry Pi detected. Installing system dependencies..."; \
+		sudo apt-get update && sudo apt-get install -y python3-dev python3-pyqt5 python3-numpy python3-gpiozero; \
+		test -d venv || python3 -m venv venv --system-site-packages; \
+	else \
+		test -d venv || python3 -m venv venv; \
+	fi
 	@$(MAKE) install
 	@echo "Virtual environment ready. Activate with: source venv/bin/activate"
 
