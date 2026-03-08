@@ -1,6 +1,6 @@
 ---
 - name: Configure Picar-BBC on Raspberry Pi
-  hosts: picar
+  hosts: "{{ target_hosts | default('picar') }}"
   become: true
   vars:
     # Update this URL to your repository
@@ -23,7 +23,6 @@
           - make
           - curl
           - gnupg
-          - software-properties-common
           - python3-pip
           - python3-venv
         state: present
@@ -52,27 +51,6 @@
         - { key: "dtparam=i2c_arm", value: "on" }
         - { key: "camera_auto_detect", value: "1" }
       notify: Reboot Pi
-
-    - name: Install Terraform (Optional)
-      block:
-        - name: Add HashiCorp GPG key
-          shell: |
-            wget -O- https://apt.releases.hashicorp.com/gpg | \
-            gpg --dearmor | \
-            tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
-          args:
-            creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
-
-        - name: Add HashiCorp repository
-          apt_repository:
-            repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
-            state: present
-            filename: hashicorp
-
-        - name: Install Terraform
-          apt:
-            name: terraform
-            state: present
 
     - name: Clone Project Repository
       git:

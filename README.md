@@ -73,17 +73,28 @@ Alternatively, you can use Ansible to automate the setup and deployment from you
 **Note**: Ansible is **agentless**. You do NOT need to install Ansible on the Raspberry Pi. It only needs to be installed on your computer (Control Node).
 
 1.  Install Ansible on your control computer.
-2.  Edit `ansible/inventory.ini` with your Pi's IP address or hostname.
-3.  Run the playbook:
+2.  Run the deployment via Make:
 
-```bash
-# Basic setup and server deployment
-ansible-playbook ansible/playbook.yml
+    ```bash
+    # Option A: Use LOCAL_RASPI_CONNECTION (Recommended)
+    # If defined in .env, simply run:
+    make ansible-deploy
 
-# With Cloudflare Tunnel
-export CLOUDFLARED_TUNNEL_TOKEN="your-token"
-ansible-playbook ansible/playbook.yml
-```
+    # If your Pi user requires a password for sudo (default), ask Ansible to prompt for it:
+    make ansible-deploy ANSIBLE_ARGS="-K"
+    # (SSH keys handle login, but administrative tasks via 'sudo' still require a password by default)
+
+    # Or pass it inline:
+    make ansible-deploy LOCAL_RASPI_CONNECTION=pi@picar.local
+
+    # Option B: Use inventory.ini
+    # Edit ansible/inventory.ini first, then run:
+    make ansible-deploy
+    
+    # With Cloudflare Tunnel
+    # Set CLOUDFLARED_TUNNEL_TOKEN in .env or export it:
+    make ansible-deploy
+    ```
 
 ## Quick Start (Docker)
 
@@ -141,23 +152,29 @@ If you prefer to run without Docker (e.g., for direct hardware access on the Pi 
 You can run Terraform and Make on your computer and deploy to the Pi remotely. This allows you to keep your Pi clean (only Docker required) and run all build/deploy commands (`make up`) from your computer.
 
 1.  **Configure SSH**: Ensure you can SSH into the Pi without a password (use SSH keys).
-2.  **Set Context**: On your computer, point Docker to the Pi:
-
     ```bash
-    export DOCKER_HOST=ssh://pi@picar.local
+    ssh-copy-id pi@picar.local
     ```
-
-3.  **Deploy**:
+2.  **Deploy**:
+    
+    You can pass the connection string directly:
 
     ```bash
+    make up LOCAL_RASPI_CONNECTION=pi@picar.local
+    ```
+    
+    **Or** create a `.env` file in the project root to save it:
+    ```bash
+    echo "LOCAL_RASPI_CONNECTION=pi@picar.local" > .env
     make up
     ```
 
 This sends the build context to the Pi, builds images on the Pi, and starts containers on the Pi.
 
 ### How this works
-1.  **`export DOCKER_HOST=ssh://pi@picar.local`**: This environment variable tells both the `docker` CLI and Terraform (via the `kreuzwerker/docker` provider) to execute commands on the remote machine instead of your local one.
-2.  **Terraform**: When you run `make up` locally, Terraform zips your source code, sends it to the Pi's Docker daemon, builds the images *on the Pi* (ensuring the correct ARM architecture), and starts the containers *on the Pi*.
+1.  **`LOCAL_RASPI_CONNECTION`**: The Makefile sets `DOCKER_HOST` based on this variable.
+2.  **`DOCKER_HOST`**: This environment variable tells both the `docker` CLI and Terraform (via the `kreuzwerker/docker` provider) to execute commands on the remote machine instead of your local one.
+3.  **Terraform**: When you run `make up` locally, Terraform zips your source code, sends it to the Pi's Docker daemon, builds the images *on the Pi* (ensuring the correct ARM architecture), and starts the containers *on the Pi*.
 
 ### Summary of what you can remove from the Pi
 *   ✅ **Terraform**: Safe to remove.

@@ -1,6 +1,11 @@
 # Use bash for shell commands
 SHELL := /bin/bash
 
+# Load configuration from .env file if it exists
+-include .env
+# Load configuration from .env.local file if it exists (overrides .env)
+-include .env.local
+
 # ==============================================================================
 # Variables
 # ==============================================================================
@@ -27,6 +32,30 @@ PORTS        := -p 5000:5000 -p 8000:8000
 # Configuration
 CLOUDFLARED_TUNNEL_TOKEN ?=
 BUILD_ARGS ?=
+LOCAL_RASPI_CONNECTION ?=
+ANSIBLE_ARGS ?=
+REPO_URL ?=
+PROJECT_DIR ?=
+
+# Tell Ansible where to find the configuration file
+export ANSIBLE_CONFIG := ansible/ansible.cfg
+
+# If LOCAL_RASPI_CONNECTION is provided, set DOCKER_HOST for Terraform and Docker CLI
+# Also configure Ansible to use this connection instead of inventory.ini
+ifneq ($(LOCAL_RASPI_CONNECTION),)
+    export DOCKER_HOST := ssh://$(LOCAL_RASPI_CONNECTION)
+    ifneq ($(findstring @,$(LOCAL_RASPI_CONNECTION)),)
+        ANSIBLE_USER := $(shell echo $(LOCAL_RASPI_CONNECTION) | cut -d@ -f1)
+        ANSIBLE_HOST := $(shell echo $(LOCAL_RASPI_CONNECTION) | cut -d@ -f2)
+        ANSIBLE_INVENTORY := -i '$(ANSIBLE_HOST),' -u $(ANSIBLE_USER)
+    else
+        ANSIBLE_INVENTORY := -i '$(LOCAL_RASPI_CONNECTION),'
+    endif
+    ANSIBLE_TARGET_HOSTS := all
+else
+    ANSIBLE_INVENTORY :=
+    ANSIBLE_TARGET_HOSTS := picar
+endif
 
 # ==============================================================================
 # Help
@@ -39,6 +68,7 @@ help:
 	@echo "--------------------------------------------------------------------------------"
 	@echo "Terraform Workflow (Preferred):"
 	@echo "  make up                  : Provision infrastructure (Builds images, starts containers)"
+	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local)"
 	@echo "  make down                : Destroy infrastructure"
 	@echo "  make reload              : Taint server image and apply (Hot reload)"
 	@echo "  make tf-clean            : Clean Terraform state"
@@ -57,6 +87,8 @@ help:
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
+	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"
+	@echo "                             (Optional: ANSIBLE_ARGS='-vvv' for debug output)"
 	@echo ""
 	@echo "Local Development:"
 	@echo "  make venv                : Create/Update virtual environment"
@@ -76,6 +108,11 @@ tf-init:
 	cd $(TF_DIR) && terraform init
 
 up: tf-init
+	@if [ -n "$(LOCAL_RASPI_CONNECTION)" ]; then \
+		echo "🚀 Deploying to REMOTE host: $(LOCAL_RASPI_CONNECTION)"; \
+	else \
+		echo "💻 Deploying to LOCAL host"; \
+	fi
 	@if [ -z "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
 		echo "⚠️  CLOUDFLARED_TUNNEL_TOKEN is not set. Cloudflare Tunnel will be SKIPPED (or destroyed if it exists)."; \
 	else \
@@ -159,7 +196,7 @@ docker-run-tunnel: docker-build create-network
 		echo "Error: CLOUDFLARED_TUNNEL_TOKEN is not set. Usage: make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=<your-token>"; \
 		exit 1; \
 	fi
-	docker run --rm -d --name $(TUNNEL_NAME) --restart unless-stopped \
+	docker run -d --name $(TUNNEL_NAME) --restart unless-stopped \
 		--network $(NETWORK_NAME) \
 		-e TUNNEL_TOKEN=$(CLOUDFLARED_TUNNEL_TOKEN) \
 		$(SERVER_IMAGE) cloudflared tunnel run
@@ -183,20 +220,22 @@ logs:
 .PHONY: ansible-ping ansible-deploy
 
 ansible-ping:
-	ansible -i ansible/inventory.ini picar -m ping
+	@echo "📡 Pinging host using inventory: $(if $(ANSIBLE_INVENTORY),$(ANSIBLE_INVENTORY),default (ansible.cfg))"
+	ansible $(ANSIBLE_INVENTORY) $(ANSIBLE_TARGET_HOSTS) -m ping $(ANSIBLE_ARGS)
 
 ansible-deploy:
+	@echo "🚀 Deploying to host using inventory: $(if $(ANSIBLE_INVENTORY),$(ANSIBLE_INVENTORY),default (ansible.cfg))"
 	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
 		echo "Error: 'ansible-playbook' is not installed."; \
 		echo "  - If running from your computer: Install Ansible (e.g., 'brew install ansible')."; \
 		echo "  - If running on the Pi: Install Ansible ('sudo apt install ansible')."; \
 		exit 1; \
 	fi
-	@if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
-		ansible-playbook -i ansible/inventory.ini ansible/playbook.yml -e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"; \
-	else \
-		ansible-playbook -i ansible/inventory.ini ansible/playbook.yml; \
-	fi
+	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
+	if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then EXTRA_VARS="$$EXTRA_VARS -e tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"; fi; \
+	if [ -n "$(REPO_URL)" ]; then EXTRA_VARS="$$EXTRA_VARS -e repo_url=$(REPO_URL)"; fi; \
+	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/playbook.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
 
 # ==============================================================================
 # Local Development
