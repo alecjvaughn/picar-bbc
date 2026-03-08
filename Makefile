@@ -201,6 +201,7 @@ docker-run-tunnel: docker-build create-network
 		echo "Error: CLOUDFLARED_TUNNEL_TOKEN is not set. Usage: make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=<your-token>"; \
 		exit 1; \
 	fi
+	-docker rm -f $(TUNNEL_NAME) 2>/dev/null || true
 	docker run -d --name $(TUNNEL_NAME) --restart unless-stopped \
 		--network $(NETWORK_NAME) \
 		-e TUNNEL_TOKEN=$(CLOUDFLARED_TUNNEL_TOKEN) \
