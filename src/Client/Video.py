@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import cv2
+import os
 import socket
 import io
 import sys
@@ -12,7 +13,9 @@ from Command import COMMAND as cmd
 
 class VideoStreaming:
     def __init__(self):
-        self.face_cascade = cv2.CascadeClassifier(r'haarcascade_frontalface_default.xml')
+        # Use absolute path relative to this file to find the cascade XML
+        cascade_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'haarcascade_frontalface_default.xml')
+        self.face_cascade = cv2.CascadeClassifier(cascade_path)
         self.video_Flag=True
         self.connect_Flag=False
         self.face_x=0
@@ -60,9 +63,9 @@ class VideoStreaming:
         try:
             self.client_socket.connect((ip, 8000))
             self.connection = self.client_socket.makefile('rb')
-        except:
-            #print "command port connect failed"
-            pass
+        except Exception as e:
+            print("Video stream connect failed:", e)
+            return
         while True:
             try:
                 stream_bytes= self.connection.read(4) 
@@ -100,4 +103,3 @@ class VideoStreaming:
 
 if __name__ == '__main__':
     pass
-

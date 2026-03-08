@@ -36,6 +36,8 @@ LOCAL_RASPI_CONNECTION ?=
 ANSIBLE_ARGS ?=
 REPO_URL ?=
 PROJECT_DIR ?=
+TUNNEL_HOSTNAME ?= picar.aleclabs.us
+TUNNEL_VIDEO_HOSTNAME ?= picar-video.aleclabs.us
 
 # Tell Ansible where to find the configuration file
 export ANSIBLE_CONFIG := ansible/ansible.cfg
@@ -96,6 +98,9 @@ help:
 	@echo "  make run-server          : Run server locally"
 	@echo "  make run-client          : Run client locally"
 	@echo "  make clean-install       : Clean node_modules (if applicable) and reinstall"
+	@echo "  make tunnel-control      : Open local access to remote control port (5000)"
+	@echo "  make tunnel-video        : Open local access to remote video port (8000)"
+	@echo "  make tunnels             : Spawn both tunnels in new Terminal windows (macOS)"
 	@echo "--------------------------------------------------------------------------------"
 
 # ==============================================================================
@@ -284,3 +289,21 @@ run-server:
 
 run-client:
 	. venv/bin/activate && python3 src/Client/Main.py
+
+tunnel-control:
+	@echo "Opening control tunnel to $(TUNNEL_HOSTNAME) on localhost:5000..."
+	cloudflared access tcp --hostname $(TUNNEL_HOSTNAME) --url localhost:5000
+
+tunnel-video:
+	@echo "Opening video tunnel to $(TUNNEL_VIDEO_HOSTNAME) on localhost:8000..."
+	cloudflared access tcp --hostname $(TUNNEL_VIDEO_HOSTNAME) --url localhost:8000
+
+tunnels:
+	@echo "Spawning tunnels in separate terminals..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		osascript -e 'tell application "Terminal" to do script "cd \"$(CURDIR)\" && make tunnel-control"'; \
+		osascript -e 'tell application "Terminal" to do script "cd \"$(CURDIR)\" && make tunnel-video"'; \
+	else \
+		echo "Auto-spawning terminals is only supported on macOS currently."; \
+		echo "Please run 'make tunnel-control' and 'make tunnel-video' in separate terminals manually."; \
+	fi
