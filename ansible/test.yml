@@ -20,7 +20,7 @@
       command: >
         timeout --signal=2 {{ test_duration }}
         docker run --rm --privileged {{ server_image }}
-        python src/Server/test.py {{ component }}
+        python test.py {{ component }}
       register: test_out
       # Return code 124 means timeout occurred (expected for sensors), 0 means success
       failed_when: test_out.rc != 0 and test_out.rc != 124

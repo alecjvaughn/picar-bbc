@@ -146,13 +146,23 @@ tf-clean:
 # Docker Manual Workflow
 # ==============================================================================
 
-.PHONY: docker-build docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean logs
+.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean logs
 
-docker-build:
+docker-build-root:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
+
+docker-build-middleware: docker-build-root
 	docker build $(BUILD_ARGS) -t $(MIDDLEWARE_IMAGE) -f docker/images/middleware/Dockerfile .
+
+docker-build-server: docker-build-middleware
 	docker build $(BUILD_ARGS) -t $(SERVER_IMAGE) -f docker/images/server/Dockerfile .
+
+docker-build-client: docker-build-middleware
 	docker build $(BUILD_ARGS) -t $(CLIENT_IMAGE) -f docker/images/client/Dockerfile .
+
+docker-build: docker-build-server
+
+docker-build-all: docker-build-server docker-build-client
 
 docker-rebuild:
 	$(MAKE) docker-build BUILD_ARGS="--no-cache"
@@ -186,7 +196,7 @@ test-hardware:
 	@echo "🧪 Running hardware test for $(COMPONENT)..."
 	docker run --rm -it --privileged \
 		$(SERVER_IMAGE) \
-		python src/Server/test.py $(COMPONENT)
+		python test.py $(COMPONENT)
 	@if [ "$(RESTART)" = "true" ]; then \
 		echo "🔄 Restarting $(SERVER_NAME)..."; \
 		$(MAKE) docker-run-server; \
@@ -208,7 +218,7 @@ x11-setup:
 		fi; \
 	fi
 
-docker-run-client: docker-build x11-setup
+docker-run-client: docker-build-client x11-setup
 	@echo "Starting client..."
 	docker run --rm -it --name $(CLIENT_NAME) \
 		-e DISPLAY=host.docker.internal:0 \

@@ -6,3 +6,4 @@ numpy
 Pillow
 opencv-python-headless
 gpiozero
+rpi-ws281x
