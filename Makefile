@@ -110,12 +110,24 @@ help:
 # Terraform Workflow
 # ==============================================================================
 
-.PHONY: tf-init up down reload tf-clean
+.PHONY: tf-init tf-apply tf-destroy up down reload tf-clean
 
 tf-init:
 	cd $(TF_DIR) && terraform init
 
-up: tf-init
+up:
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "🍓 Raspberry Pi detected. Switching to Docker Manual Workflow (Server Only)..."; \
+		$(MAKE) docker-run-server; \
+		if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
+			echo "🚇 Starting Cloudflare Tunnel..."; \
+			$(MAKE) docker-run-tunnel; \
+		fi; \
+	else \
+		$(MAKE) tf-apply; \
+	fi
+
+tf-apply: tf-init
 	@if [ -n "$(LOCAL_RASPI_CONNECTION)" ]; then \
 		echo "🚀 Deploying to REMOTE host: $(LOCAL_RASPI_CONNECTION)"; \
 	else \
@@ -131,6 +143,14 @@ up: tf-init
 	cd $(TF_DIR) && terraform apply -auto-approve -var="tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"
 
 down:
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "🍓 Raspberry Pi detected. Stopping manual containers..."; \
+		$(MAKE) docker-down; \
+	else \
+		$(MAKE) tf-destroy; \
+	fi
+
+tf-destroy:
 	cd $(TF_DIR) && terraform destroy -auto-approve
 	@echo "Cleaning up dangling images and networks..."
 	-docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) 2>/dev/null || true
@@ -147,7 +167,7 @@ tf-clean:
 # Docker Manual Workflow
 # ==============================================================================
 
-.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
+.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-run-test docker-up docker-down docker-clean docker-prune logs
 
 docker-build-root:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
@@ -173,6 +193,8 @@ create-network:
 
 docker-run-server: docker-build create-network
 	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
+	@# Aggressively kill anything on port 5000 (use with caution)
+	-sudo fuser -k 5000/tcp 2>/dev/null || true
 	docker run --rm -d --name $(SERVER_NAME) \
 		--network $(NETWORK_NAME) \
 		--privileged \
@@ -186,6 +208,13 @@ debug-server: docker-build
 	docker run --privileged --name $(DEBUG_SERVER_NAME) \
 		$(PORTS) \
 		$(SERVER_IMAGE)
+
+# Non-interactive test runner for automation/Ansible
+docker-run-test:
+	docker run --rm --privileged \
+		-v /tmp:/tmp \
+		$(SERVER_IMAGE) \
+		python test.py $(COMPONENT)
 
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
@@ -291,6 +320,7 @@ ansible-test:
 	@EXTRA_VARS="-e component=$(COMPONENT) -e server_image=$(SERVER_IMAGE)"; \
 	if [ -n "$(DURATION)" ]; then EXTRA_VARS="$$EXTRA_VARS -e test_duration=$(DURATION)"; fi; \
 	if [ -n "$(RESTART)" ]; then EXTRA_VARS="$$EXTRA_VARS -e restart=$(RESTART)"; fi; \
+	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
 	ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
 
 # ==============================================================================
@@ -312,8 +342,10 @@ install:
 		. venv/bin/activate && pip install -r requirements.tmp; \
 		rm requirements.tmp; \
 	else \
-		echo "Non-RPi OS detected. Installing all requirements..."; \
-		. venv/bin/activate && pip install -r src/requirements.txt; \
+		echo "Non-RPi OS detected. Installing requirements (excluding hardware libs)..."; \
+		grep -v -e "rpi-ws281x" src/requirements.txt > requirements.tmp; \
+		. venv/bin/activate && pip install -r requirements.tmp; \
+		rm requirements.tmp; \
 	fi
 
 rebuild-hardware:

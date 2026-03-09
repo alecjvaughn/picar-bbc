@@ -7,6 +7,7 @@
     server_image: "local/picar-server:latest"
     container_name: "picar-server"
     test_duration: "60s"
+    project_dir: "/home/{{ ansible_user }}/picar-bbc"
 
   tasks:
     - name: Stop running server to free hardware resources
@@ -25,8 +26,9 @@
       # Sends SIGINT (2) to allow python to catch KeyboardInterrupt and cleanup.
       command: >
         timeout --signal=2 {{ test_duration }}
-        docker run --rm --privileged -v /tmp:/tmp {{ server_image }}
-        python test.py {{ component }}
+        make docker-run-test COMPONENT={{ component }}
+      args:
+        chdir: "{{ project_dir }}"
       register: test_out
       # Return code 124 means timeout occurred (expected for sensors), 0 means success
       failed_when: test_out.rc != 0 and test_out.rc != 124
@@ -47,11 +49,8 @@
         msg: "{{ test_out.stdout_lines }}"
 
     - name: Restart Picar Server
-      command: >
-        docker run --rm -d --name {{ container_name }}
-        --privileged
-        --network picar-net
-        -p 5000:5000 -p 8000:8000
-        {{ server_image }}
+      make:
+        chdir: "{{ project_dir }}"
+        target: docker-run-server
       when: restart | default(false) | bool
       ignore_errors: yes

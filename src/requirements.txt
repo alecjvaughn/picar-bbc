@@ -7,3 +7,4 @@ Pillow
 opencv-python-headless
 gpiozero
 rpi-ws281x
+PyQt5
