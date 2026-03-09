@@ -84,11 +84,13 @@ help:
 	@echo "  make docker-run-client   : Run client container manually"
 	@echo "  make docker-run-tunnel   : Run Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN)"
 	@echo "  make debug-server        : Run server in foreground"
+	@echo "  make test-hardware       : Run hardware component tests (stops server)"
 	@echo "  make logs                : View server logs"
 	@echo ""
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
+	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
 	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"
 	@echo "                             (Optional: ANSIBLE_ARGS='-vvv' for debug output)"
 	@echo ""
@@ -173,6 +175,23 @@ debug-server: docker-build
 		$(PORTS) \
 		$(SERVER_IMAGE)
 
+test-hardware:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer>"; \
+		exit 1; \
+	fi
+	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
+	-docker stop $(SERVER_NAME) 2>/dev/null || true
+	@echo "🧪 Running hardware test for $(COMPONENT)..."
+	docker run --rm -it --privileged \
+		$(SERVER_IMAGE) \
+		python src/Server/test.py $(COMPONENT)
+	@if [ "$(RESTART)" = "true" ]; then \
+		echo "🔄 Restarting $(SERVER_NAME)..."; \
+		$(MAKE) docker-run-server; \
+	fi
+
 x11-setup:
 	@echo "Configuring X11..."
 	@if [ "$$(uname)" = "Darwin" ]; then \
@@ -242,6 +261,18 @@ ansible-deploy:
 	if [ -n "$(REPO_URL)" ]; then EXTRA_VARS="$$EXTRA_VARS -e repo_url=$(REPO_URL)"; fi; \
 	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
 	ansible-playbook $(ANSIBLE_INVENTORY) ansible/playbook.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+
+ansible-test:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer> [DURATION=10s]"; \
+		exit 1; \
+	fi
+	@echo "🧪 Running hardware test via Ansible for $(COMPONENT)..."
+	@EXTRA_VARS="-e component=$(COMPONENT) -e server_image=$(SERVER_IMAGE)"; \
+	if [ -n "$(DURATION)" ]; then EXTRA_VARS="$$EXTRA_VARS -e test_duration=$(DURATION)"; fi; \
+	if [ -n "$(RESTART)" ]; then EXTRA_VARS="$$EXTRA_VARS -e restart=$(RESTART)"; fi; \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
 
 # ==============================================================================
 # Local Development

@@ -1,0 +1,39 @@
+---
+- name: Run Hardware Component Test
+  hosts: all
+  become: yes
+  vars:
+    component: "Led"
+    server_image: "local/picar-server:latest"
+    container_name: "picar-server"
+    test_duration: "10s"
+
+  tasks:
+    - name: Stop running server to free hardware resources
+      command: docker stop {{ container_name }}
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Execute hardware test
+      # Use timeout to handle infinite loops in sensor tests (Ultrasonic, Infrared, etc.)
+      # Sends SIGINT (2) to allow python to catch KeyboardInterrupt and cleanup.
+      command: >
+        timeout --signal=2 {{ test_duration }}
+        docker run --rm --privileged {{ server_image }}
+        python src/Server/test.py {{ component }}
+      register: test_out
+      # Return code 124 means timeout occurred (expected for sensors), 0 means success
+      failed_when: test_out.rc != 0 and test_out.rc != 124
+
+    - name: Display test output
+      debug:
+        msg: "{{ test_out.stdout_lines }}"
+
+    - name: Restart Picar Server
+      command: >
+        docker run --rm -d --name {{ container_name }}
+        --network picar-net
+        -p 5000:5000 -p 8000:8000
+        {{ server_image }}
+      when: restart | default(false) | bool
+      ignore_errors: yes
