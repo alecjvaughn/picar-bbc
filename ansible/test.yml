@@ -44,6 +44,11 @@
         msg: "Camera test failed: /tmp/test_camera.jpg was not created."
       when: (component == "Camera" or component == "Non-Motor-All") and not camera_file.stat.exists
 
+    - name: Fail if Camera file is empty
+      fail:
+        msg: "Camera test failed: /tmp/test_camera.jpg is empty."
+      when: (component == "Camera" or component == "Non-Motor-All") and camera_file.stat.exists and camera_file.stat.size == 0
+
     - name: Display test output
       debug:
         msg: "{{ test_out.stdout_lines }}"

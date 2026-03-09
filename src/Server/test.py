@@ -21,6 +21,13 @@ def test_Led():
         led.colorBlink(0)  #turn off the light
         print ("\nEnd of program") 
         
+def test_Led_Off():
+    from led import Led
+    led = Led()
+    if led.is_support_led_function:
+        led.colorBlink(0)
+    print("LEDs cleared.")
+
 def test_Motor(): 
     import time
     from motor import Ordinary_Car  
@@ -86,6 +93,7 @@ def test_Infrared(duration=None):
                 print ('Right')
             elif ir1_value == 1 and ir2_value != 1 and ir3_value != 1:
                 print ('Left')
+            time.sleep(0.1)
     except KeyboardInterrupt:
         # Close the Infrared object and print a message when interrupted
         infrared.close()
@@ -221,18 +229,24 @@ if __name__ == '__main__':
     if len(sys.argv)<2:
         print ("Parameter error: Please assign the device")
         exit() 
+    # Clear LEDs before any test starts
+    from led import Led
+    led_pre_test_clear = Led()
+    if led_pre_test_clear.is_support_led_function: led_pre_test_clear.colorBlink(0)
     if sys.argv[1] == 'Led':
         test_Led()
+    elif sys.argv[1] == 'Led-Off':
+        test_Led_Off()
     elif sys.argv[1] == 'Motor':
         test_Motor()
     elif sys.argv[1] == 'Ultrasonic':
         test_Ultrasonic()
     elif sys.argv[1] == 'Infrared':
-        test_Infrared()        
+        test_Infrared(duration=10)
     elif sys.argv[1] == 'Servo': 
         test_Servo()               
     elif sys.argv[1] == 'ADC':   
-        test_Adc()  
+        test_Adc(duration=10)
     elif sys.argv[1] == 'Battery':
         test_Battery()
     elif sys.argv[1] == 'Buzzer':   

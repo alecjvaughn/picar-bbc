@@ -79,6 +79,9 @@ class mywindow(QMainWindow, Ui_server_ui):
         self.tcp_server = Server()
         self.command = Command()
         self.led = Led()
+        # Explicitly turn off LEDs on startup to ensure a clean state
+        if self.led.is_support_led_function:
+            self.led.colorBlink(0)
         self.car = Car()
         self.buzzer = Buzzer()
         self.camera = Camera(stream_size=(400, 300))

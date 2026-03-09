@@ -85,6 +85,7 @@ help:
 	@echo "  make docker-run-tunnel   : Run Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN)"
 	@echo "  make debug-server        : Run server in foreground"
 	@echo "  make test-hardware       : Run hardware component tests (stops server)"
+	@echo "  make clear-leds          : Manually turn off LEDs (stops server)"
 	@echo "  make docker-prune        : Remove all stopped containers, dangling images, and unused networks"
 	@echo "  make logs                : View server logs"
 	@echo ""
@@ -245,6 +246,17 @@ test-hardware:
 		echo "🔄 Restarting $(SERVER_NAME)..."; \
 		$(MAKE) docker-run-server; \
 	fi
+
+clear-leds:
+	@echo "🧹 Clearing LEDs..."
+	-docker stop $(SERVER_NAME) 2>/dev/null || true
+	docker run --rm --privileged \
+		-u root \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		-v /run/udev:/run/udev:ro \
+		$(SERVER_IMAGE) \
+		python test.py Led-Off
 
 x11-setup:
 	@echo "Configuring X11..."
