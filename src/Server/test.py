@@ -43,14 +43,17 @@ def test_Motor():
     finally:
         PWM.close() # Close the PWM instance
 
-def test_Ultrasonic():
+def test_Ultrasonic(duration=None):
     import time
     from ultrasonic import Ultrasonic
     # Initialize the Ultrasonic instance with default pin numbers and max distance
     ultrasonic = Ultrasonic()
+    start_time = time.time()
     try:
         print("Program is starting ...")
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             distance = ultrasonic.get_distance()  # Get the distance measurement in centimeters
             if distance is not None:
                 print(f"Ultrasonic distance: {distance}cm")  # Print the distance measurement
@@ -60,13 +63,18 @@ def test_Ultrasonic():
     finally:
         print("\nEnd of program")  # Print an end message
 
-def test_Infrared():
+def test_Infrared(duration=None):
+    import time
     from infrared import Infrared
     # Create an Infrared object
     infrared = Infrared()
+    start_time = time.time()
     try:
+        print("Program is starting ...")
         # Continuously read and print the combined value of all infrared sensors
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             ir1_value = infrared.read_one_infrared(1)
             ir2_value = infrared.read_one_infrared(2)
             ir3_value = infrared.read_one_infrared(3)
@@ -81,13 +89,16 @@ def test_Infrared():
         infrared.close()
         print("\nEnd of program")
 
-def test_Servo():
+def test_Servo(duration=None):
     import time
     from servo import Servo
     servo = Servo()
+    start_time = time.time()
     try:
         print ("Program is starting ...")
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             for i in range(50,110,1):
                 servo.set_servo_pwm('0',i)
                 time.sleep(0.01)
@@ -106,13 +117,16 @@ def test_Servo():
     finally:
         print ("\nEnd of program")
         
-def test_Adc():
+def test_Adc(duration=None):
     import time
     from adc import ADC
     adc = ADC()
+    start_time = time.time()
     try:
         print ("Program is starting ...")
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             Left_IDR = adc.read_adc(0)
             print ("The photoresistor voltage on the left is "+str(Left_IDR)+"V")
             Right_IDR = adc.read_adc(1)
@@ -150,15 +164,35 @@ def test_Camera():
         print ("Program is starting ...")
         camera = Camera()
         print ("Camera initialized. Starting preview for 5 seconds...")
-        camera.start_image(show_preview=True)
+        camera.start_image(show_preview=False)
         time.sleep(5)
-        print ("Capturing test image to 'test_camera.jpg'...")
-        camera.save_image("test_camera.jpg")
+        filename = "/tmp/test_camera.jpg"
+        print (f"Capturing test image to '{filename}'...")
+        camera.save_image(filename)
         camera.close()
         print ("\nEnd of program")
     except Exception as e:
         print (f"Camera Error: {e}")
         print ("\nEnd of program")
+
+def test_Motor_All():
+    print("\n=== Testing All Motor Components ===")
+    print(">> Testing DC Motors...")
+    test_Motor()
+    print(">> Testing Servos (5s)...")
+    test_Servo(duration=5)
+
+def test_Non_Motor_All():
+    print("\n=== Testing All Non-Motor Components ===")
+    test_Led()
+    test_Buzzer()
+    test_Camera()
+    print(">> Testing Ultrasonic (5s)...")
+    test_Ultrasonic(duration=5)
+    print(">> Testing Infrared (5s)...")
+    test_Infrared(duration=5)
+    print(">> Testing ADC (5s)...")
+    test_Adc(duration=5)
 
 # Main program logic follows:
 if __name__ == '__main__':
@@ -183,6 +217,7 @@ if __name__ == '__main__':
         test_Buzzer()  
     elif sys.argv[1] == 'Camera':
         test_Camera()
-        
-        
-        
+    elif sys.argv[1] == 'Motor-All':
+        test_Motor_All()
+    elif sys.argv[1] == 'Non-Motor-All':
+        test_Non_Motor_All()

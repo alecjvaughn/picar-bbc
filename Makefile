@@ -190,13 +190,14 @@ debug-server: docker-build
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer>"; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Motor-All|Non-Motor-All>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
 	-docker stop $(SERVER_NAME) 2>/dev/null || true
 	@echo "🧪 Running hardware test for $(COMPONENT)..."
 	docker run --rm -it --privileged \
+		-v /tmp:/tmp \
 		$(SERVER_IMAGE) \
 		python test.py $(COMPONENT)
 	@if [ "$(RESTART)" = "true" ]; then \

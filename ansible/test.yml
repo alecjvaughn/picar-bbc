@@ -14,16 +14,33 @@
       ignore_errors: yes
       changed_when: false
 
+    - name: Cleanup previous Camera Test Output
+      file:
+        path: /tmp/test_camera.jpg
+        state: absent
+      when: component == "Camera"
+
     - name: Execute hardware test
       # Use timeout to handle infinite loops in sensor tests (Ultrasonic, Infrared, etc.)
       # Sends SIGINT (2) to allow python to catch KeyboardInterrupt and cleanup.
       command: >
         timeout --signal=2 {{ test_duration }}
-        docker run --rm --privileged {{ server_image }}
+        docker run --rm --privileged -v /tmp:/tmp {{ server_image }}
         python test.py {{ component }}
       register: test_out
       # Return code 124 means timeout occurred (expected for sensors), 0 means success
       failed_when: test_out.rc != 0 and test_out.rc != 124
+
+    - name: Verify Camera Test Output
+      stat:
+        path: /tmp/test_camera.jpg
+      register: camera_file
+      when: component == "Camera"
+
+    - name: Fail if Camera file missing
+      fail:
+        msg: "Camera test failed: /tmp/test_camera.jpg was not created."
+      when: component == "Camera" and not camera_file.stat.exists
 
     - name: Display test output
       debug:
