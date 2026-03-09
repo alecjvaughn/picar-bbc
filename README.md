@@ -229,6 +229,7 @@ The project includes a test suite to verify individual hardware components. This
 - **`Servo`**: Sweeps camera servos (pan/tilt).
 - **`ADC`**: Reads battery voltage and photoresistor values.
 - **`Buzzer`**: Beeps for 3 seconds.
+- **`Camera`**: Tests initialization and captures a test image (`test_camera.jpg`).
 
 ### 1. Manual Testing (On the Pi)
 If you are SSH'd into the Pi, you can run tests using Docker. This will temporarily stop the main server to free up hardware resources.

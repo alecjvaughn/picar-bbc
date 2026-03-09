@@ -143,6 +143,23 @@ def test_Buzzer():
     finally:
         print ("\nEnd of program")
            
+def test_Camera():
+    import time
+    from camera import Camera
+    try:
+        print ("Program is starting ...")
+        camera = Camera()
+        print ("Camera initialized. Starting preview for 5 seconds...")
+        camera.start_image()
+        time.sleep(5)
+        print ("Capturing test image to 'test_camera.jpg'...")
+        camera.save_image("test_camera.jpg")
+        camera.close()
+        print ("\nEnd of program")
+    except Exception as e:
+        print (f"Camera Error: {e}")
+        print ("\nEnd of program")
+
 # Main program logic follows:
 if __name__ == '__main__':
     print ('Program is starting ... ')
@@ -164,6 +181,8 @@ if __name__ == '__main__':
         test_Adc()  
     elif sys.argv[1] == 'Buzzer':   
         test_Buzzer()  
+    elif sys.argv[1] == 'Camera':
+        test_Camera()
         
         
         
