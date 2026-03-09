@@ -49,7 +49,7 @@
         msg: "{{ test_out.stdout_lines }}"
 
     - name: Restart Picar Server
-      make:
+      community.general.make:
         chdir: "{{ project_dir }}"
         target: docker-run-server
       when: restart | default(false) | bool

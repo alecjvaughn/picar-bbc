@@ -25,7 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     python3-smbus \
     python3-spidev \
-    python3-rpi.gpio \
+    python3-rpi-lgpio \
+    python3-lgpio \
     && curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb \
     && dpkg -i cloudflared.deb \
     && rm cloudflared.deb \

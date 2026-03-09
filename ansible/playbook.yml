@@ -61,13 +61,13 @@
         group: "{{ ansible_user }}"
 
     - name: Build and Run Server (Docker)
-      make:
+      community.general.make:
         chdir: "{{ project_dir }}"
         target: docker-run-server
       become: false
 
     - name: Build and Run Tunnel (Docker)
-      make:
+      community.general.make:
         chdir: "{{ project_dir }}"
         target: docker-run-tunnel
       become: false

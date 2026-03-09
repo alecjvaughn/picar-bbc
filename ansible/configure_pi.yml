@@ -25,3 +25,11 @@
     - { regexp: 'camera_auto_detect=', line: 'camera_auto_detect=1' }
     - { regexp: 'gpu_mem=', line: 'gpu_mem=128' }
   notify: Reboot Pi
+
+- name: Disable onboard audio (Fixes LED strip issues)
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtparam=audio='
+    line: dtparam=audio=off
+    create: yes
+  notify: Reboot Pi

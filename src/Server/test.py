@@ -2,6 +2,8 @@ def test_Led():
     import time
     from led import Led
     led=Led()
+    if not led.is_support_led_function:
+        raise RuntimeError("LED initialization failed. Check hardware configuration (SPI/GPIO) and permissions.")
     try:
         led.ledIndex(0x01, 255,   0,   0)      #Red
         led.ledIndex(0x02, 255, 125,   0)      #orange

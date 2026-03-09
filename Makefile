@@ -198,6 +198,7 @@ docker-run-server: docker-build create-network
 	docker run --rm -d --name $(SERVER_NAME) \
 		--network $(NETWORK_NAME) \
 		--privileged \
+		-u root \
 		$(PORTS) \
 		$(SERVER_IMAGE)
 
@@ -206,12 +207,18 @@ debug-server: docker-build
 	-docker rm -f $(DEBUG_SERVER_NAME) 2>/dev/null || true
 	@echo "Starting server in debug mode (foreground)..."
 	docker run --privileged --name $(DEBUG_SERVER_NAME) \
+		-u root \
 		$(PORTS) \
 		$(SERVER_IMAGE)
 
 # Non-interactive test runner for automation/Ansible
 docker-run-test:
 	docker run --rm --privileged \
+		-u root \
+		--device /dev/i2c-1 \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		-v /run/udev:/run/udev:ro \
 		-v /tmp:/tmp \
 		$(SERVER_IMAGE) \
 		python test.py $(COMPONENT)
@@ -226,6 +233,11 @@ test-hardware:
 	-docker stop $(SERVER_NAME) 2>/dev/null || true
 	@echo "🧪 Running hardware test for $(COMPONENT)..."
 	docker run --rm -it --privileged \
+		-u root \
+		--device /dev/i2c-1 \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		-v /run/udev:/run/udev:ro \
 		-v /tmp:/tmp \
 		$(SERVER_IMAGE) \
 		python test.py $(COMPONENT)
