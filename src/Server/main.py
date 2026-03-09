@@ -12,8 +12,10 @@ def mock_hardware():
     modules = [
         'rpi_ws281x', 'smbus', 'spidev', 'fcntl'
     ]
-    # Force mocks if running in Docker container to avoid hardware access crashes
-    force_mock = os.environ.get('CONTAINER') == 'true'
+    # Check if we are on a Raspberry Pi (Device Tree Model file exists)
+    is_pi = os.path.exists('/sys/firmware/devicetree/base/model')
+    # Force mocks ONLY if we are in a container AND NOT on a Pi (e.g. Mac/PC)
+    force_mock = os.environ.get('CONTAINER') == 'true' and not is_pi
 
     for mod in modules:
         try:
@@ -30,8 +32,7 @@ def mock_hardware():
     # This prevents BadPinFactory errors on macOS/Windows
     try:
         # Check if we are in a container OR not on a Pi
-        is_container = os.environ.get('CONTAINER') == 'true'
-        if is_container or not os.path.exists('/proc/cpuinfo'):
+        if not is_pi:
             import gpiozero
             from gpiozero.pins.mock import MockFactory
             from gpiozero import Device
