@@ -5,28 +5,35 @@ FROM local/root_base:latest AS python_middleware
 # 2. Install Runtime Dependencies
 # Install Python 3, pip, and venv (standard for Debian 12+)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    # System & Build Tools
+    build-essential \
     ca-certificates \
+    curl \
+    procps \
+    # Python Core
     python3 \
+    python3-dev \
     python3-pip \
     python3-venv \
-    python3-dev \
-    build-essential \
-    python3-pyqt5 \
-    qtbase5-dev \
-    qt5-qmake \
-    python3-numpy \
-    python3-pil \
-    libx11-xcb1 \
-    libxcb-xinerama0 \
-    libxkbcommon-x11-0 \
-    libxcb-cursor0 \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    # Hardware & GPIO
+    i2c-tools \
+    python3-lgpio \
+    python3-rpi-lgpio \
     python3-smbus \
     python3-spidev \
-    python3-rpi-lgpio \
-    python3-lgpio \
+    # GUI & Display (Qt/X11)
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libx11-xcb1 \
+    libxcb-cursor0 \
+    libxcb-xinerama0 \
+    libxkbcommon-x11-0 \
+    python3-pyqt5 \
+    qt5-qmake \
+    qtbase5-dev \
+    # Python Science/Image
+    python3-numpy \
+    python3-pil \
     && curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb \
     && dpkg -i cloudflared.deb \
     && rm cloudflared.deb \

@@ -23,6 +23,7 @@
           - make
           - curl
           - gnupg
+          - i2c-tools
           - python3-pip
           - python3-venv
         state: present

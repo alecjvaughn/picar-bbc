@@ -85,6 +85,9 @@ help:
 	@echo "  make docker-run-tunnel   : Run Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN)"
 	@echo "  make debug-server        : Run server in foreground"
 	@echo "  make test-hardware       : Run hardware component tests (stops server)"
+	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
+	@echo "  make start-server-app    : Start the Python app inside container"
+	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
 	@echo "  make clear-leds          : Manually turn off LEDs (stops server)"
 	@echo "  make docker-prune        : Remove all stopped containers, dangling images, and unused networks"
 	@echo "  make logs                : View server logs"
@@ -201,7 +204,8 @@ docker-run-server: docker-build create-network
 		--privileged \
 		-u root \
 		$(PORTS) \
-		$(SERVER_IMAGE)
+		$(SERVER_IMAGE) \
+		/bin/bash -c "python3 main.py --no-gui; tail -f /dev/null"
 
 debug-server: docker-build
 	@echo "Cleaning up old debug container..."
@@ -217,6 +221,7 @@ docker-run-test:
 	docker run --rm --privileged \
 		-u root \
 		--device /dev/i2c-1 \
+		--device /dev/video0 \
 		--device /dev/spidev0.0 \
 		--device /dev/spidev0.1 \
 		-v /run/udev:/run/udev:ro \
@@ -236,6 +241,7 @@ test-hardware:
 	docker run --rm -it --privileged \
 		-u root \
 		--device /dev/i2c-1 \
+		--device /dev/video0 \
 		--device /dev/spidev0.0 \
 		--device /dev/spidev0.1 \
 		-v /run/udev:/run/udev:ro \
@@ -246,6 +252,24 @@ test-hardware:
 		echo "🔄 Restarting $(SERVER_NAME)..."; \
 		$(MAKE) docker-run-server; \
 	fi
+
+test-exec:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		exit 1; \
+	fi
+	@echo "⚠️  Running test inside the ACTIVE $(SERVER_NAME) container..."
+	@echo "    Note: This may conflict with the running server (e.g. Camera busy, LEDs overwriting)."
+	docker exec -u root -it $(SERVER_NAME) python3 test.py $(COMPONENT)
+
+stop-server-app:
+	@echo "🛑 Killing Python server process (Container $(SERVER_NAME) will remain up)..."
+	-docker exec -u root $(SERVER_NAME) pkill -f "python3 main.py"
+
+start-server-app:
+	@echo "▶️  Starting Python server process in background..."
+	docker exec -u root -d $(SERVER_NAME) python3 main.py --no-gui
 
 clear-leds:
 	@echo "🧹 Clearing LEDs..."
