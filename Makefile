@@ -96,8 +96,10 @@ help:
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
+	@echo "  make ansible-reboot      : Reboot the Pi and poll for system health"
 	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"
 	@echo "                             (Optional: ANSIBLE_ARGS='-vvv' for debug output)"
+	@echo "  make ansible-nuke        : Wipe the project directory on the Pi (Clean Slate)"
 	@echo ""
 	@echo "Local Development:"
 	@echo "  make venv                : Create/Update virtual environment"
@@ -114,7 +116,7 @@ help:
 # Terraform Workflow
 # ==============================================================================
 
-.PHONY: tf-init tf-apply tf-destroy up down reload tf-clean
+.PHONY: tf-init tf-apply tf-destroy up down reload tf-clean ansible-reboot ansible-nuke
 
 tf-init:
 	cd $(TF_DIR) && terraform init
@@ -197,8 +199,9 @@ create-network:
 
 docker-run-server: docker-build create-network
 	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
-	@# Aggressively kill anything on port 5000 (use with caution)
+	@# Aggressively kill anything on ports 5000/8000 (use with caution)
 	-sudo fuser -k 5000/tcp 2>/dev/null || true
+	-sudo fuser -k 8000/tcp 2>/dev/null || true
 	docker run --rm -d --name $(SERVER_NAME) \
 		--network $(NETWORK_NAME) \
 		--privileged \
@@ -370,6 +373,18 @@ ansible-test:
 	if [ -n "$(RESTART)" ]; then EXTRA_VARS="$$EXTRA_VARS -e restart=$(RESTART)"; fi; \
 	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
 	ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+
+ansible-reboot:
+	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
+	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/reboot.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+
+ansible-nuke:
+	@echo "☢️  Nuking project directory on $(ANSIBLE_TARGET_HOSTS)..."
+	@read -p "Are you sure you want to delete the project directory on the remote host? [y/N] " ans && [ $${ans:-N} = y ]
+	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
+	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/nuke.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
 
 # ==============================================================================
 # Local Development

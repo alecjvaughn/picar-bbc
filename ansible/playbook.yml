@@ -52,7 +52,7 @@
         version: main
         force: yes
       become: false
-      ignore_errors: yes # Proceed even if repo URL is default/invalid (assuming manual copy)
+      ignore_errors: no
 
     - name: Ensure project directory exists
       file:
