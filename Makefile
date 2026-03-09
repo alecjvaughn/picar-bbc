@@ -84,13 +84,15 @@ help:
 	@echo "  make docker-run-client   : Run client container manually"
 	@echo "  make docker-run-tunnel   : Run Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN)"
 	@echo "  make debug-server        : Run server in foreground"
-	@echo "  make test-hardware       : Run hardware component tests (stops server)"
-	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
-	@echo "  make start-server-app    : Start the Python app inside container"
-	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
-	@echo "  make clear-leds          : Manually turn off LEDs (stops server)"
 	@echo "  make docker-prune        : Remove all stopped containers, dangling images, and unused networks"
 	@echo "  make logs                : View server logs"
+	@echo ""
+	@echo "Testing & Hardware Control:"
+	@echo "  make test-hardware       : Run hardware component tests (stops server)"
+	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
+	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
+	@echo "  make start-server-app    : Start the Python app inside container"
+	@echo "  make clear-leds          : Manually turn off LEDs (stops server)"
 	@echo ""
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
@@ -173,7 +175,7 @@ tf-clean:
 # Docker Manual Workflow
 # ==============================================================================
 
-.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-run-test docker-up docker-down docker-clean docker-prune logs
+.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
 
 docker-build-root:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
@@ -219,53 +221,6 @@ debug-server: docker-build
 		$(PORTS) \
 		$(SERVER_IMAGE)
 
-# Non-interactive test runner for automation/Ansible
-docker-run-test:
-	docker run --rm --privileged \
-		-u root \
-		--device /dev/i2c-1 \
-		--device /dev/video0 \
-		--device /dev/spidev0.0 \
-		--device /dev/spidev0.1 \
-		-v /run/udev:/run/udev:ro \
-		-v /tmp:/tmp \
-		$(SERVER_IMAGE) \
-		python test.py $(COMPONENT)
-
-test-hardware:
-	@if [ -z "$(COMPONENT)" ]; then \
-		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
-		exit 1; \
-	fi
-	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
-	-docker stop $(SERVER_NAME) 2>/dev/null || true
-	@echo "🧪 Running hardware test for $(COMPONENT)..."
-	docker run --rm -it --privileged \
-		-u root \
-		--device /dev/i2c-1 \
-		--device /dev/video0 \
-		--device /dev/spidev0.0 \
-		--device /dev/spidev0.1 \
-		-v /run/udev:/run/udev:ro \
-		-v /tmp:/tmp \
-		$(SERVER_IMAGE) \
-		python test.py $(COMPONENT)
-	@if [ "$(RESTART)" = "true" ]; then \
-		echo "🔄 Restarting $(SERVER_NAME)..."; \
-		$(MAKE) docker-run-server; \
-	fi
-
-test-exec:
-	@if [ -z "$(COMPONENT)" ]; then \
-		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
-		exit 1; \
-	fi
-	@echo "⚠️  Running test inside the ACTIVE $(SERVER_NAME) container..."
-	@echo "    Note: This may conflict with the running server (e.g. Camera busy, LEDs overwriting)."
-	docker exec -u root -it $(SERVER_NAME) python3 test.py $(COMPONENT)
-
 stop-server-app:
 	@echo "🛑 Killing Python server process (Container $(SERVER_NAME) will remain up)..."
 	-docker exec -u root $(SERVER_NAME) pkill -f "python3 main.py"
@@ -276,14 +231,8 @@ start-server-app:
 
 clear-leds:
 	@echo "🧹 Clearing LEDs..."
-	-docker stop $(SERVER_NAME) 2>/dev/null || true
-	docker run --rm --privileged \
-		-u root \
-		--device /dev/spidev0.0 \
-		--device /dev/spidev0.1 \
-		-v /run/udev:/run/udev:ro \
-		$(SERVER_IMAGE) \
-		python test.py Led-Off
+	$(MAKE) stop-server-app
+	docker exec -u root $(SERVER_NAME) python3 test.py Led-Off
 
 x11-setup:
 	@echo "Configuring X11..."
@@ -336,6 +285,59 @@ docker-prune: docker-down
 
 logs:
 	docker logs -f $(SERVER_NAME)
+
+# ==============================================================================
+# Testing Workflow
+# ==============================================================================
+
+.PHONY: docker-run-test test-hardware test-exec
+
+# Non-interactive test runner for automation/Ansible
+docker-run-test:
+	docker run --rm --privileged \
+		-u root \
+		--device /dev/i2c-1 \
+		--device /dev/video0 \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		-v /run/udev:/run/udev:ro \
+		-v /tmp:/tmp \
+		$(SERVER_IMAGE) \
+		python test.py $(COMPONENT)
+
+test-hardware:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		exit 1; \
+	fi
+	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
+	-docker stop $(SERVER_NAME) 2>/dev/null || true
+	@echo "🧪 Running hardware test for $(COMPONENT)..."
+	docker run --rm -it --privileged \
+		-u root \
+		--device /dev/i2c-1 \
+		--device /dev/video0 \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		-v /run/udev:/run/udev:ro \
+		-v /tmp:/tmp \
+		$(SERVER_IMAGE) \
+		python test.py $(COMPONENT)
+	@if [ "$(RESTART)" = "true" ]; then \
+		echo "🔄 Restarting $(SERVER_NAME)..."; \
+		$(MAKE) docker-run-server; \
+	fi
+
+test-exec:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		exit 1; \
+	fi
+	@echo "⚠️  Running test inside the ACTIVE $(SERVER_NAME) container..."
+	@echo "    Note: This may conflict with the running server (e.g. Camera busy, LEDs overwriting)."
+	docker exec -u root -it $(SERVER_NAME) python3 test.py $(COMPONENT)
 
 # ==============================================================================
 # Ansible Workflow

@@ -10,10 +10,11 @@
     project_dir: "/home/{{ ansible_user }}/picar-bbc"
 
   tasks:
-    - name: Stop running server to free hardware resources
-      command: docker stop {{ container_name }}
+    - name: Stop server application to free hardware resources
+      community.general.make:
+        chdir: "{{ project_dir }}"
+        target: stop-server-app
       ignore_errors: yes
-      changed_when: false
 
     - name: Cleanup previous Camera Test Output
       file:
@@ -53,9 +54,9 @@
       debug:
         msg: "{{ test_out.stdout_lines }}"
 
-    - name: Restart Picar Server
+    - name: Restart Server Application
       community.general.make:
         chdir: "{{ project_dir }}"
-        target: docker-run-server
-      when: restart | default(false) | bool
+        target: start-server-app
+      when: restart | default(true) | bool
       ignore_errors: yes
