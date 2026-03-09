@@ -24,6 +24,11 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
+    - name: Force Remove Existing Containers (Ensure Clean Restart)
+      command: docker rm -f picar-server picar-tunnel
+      ignore_errors: yes
+      changed_when: false
+
     - name: Build and Run Server (Docker)
       community.general.make:
         chdir: "{{ project_dir }}"
@@ -38,3 +43,10 @@
       environment:
         CLOUDFLARED_TUNNEL_TOKEN: "{{ tunnel_token }}"
       when: tunnel_token | length > 0
+
+    - name: Verify Server Container is Running
+      command: docker inspect -f '{{ "{{" }}.State.Status{{ "}}" }}' picar-server
+      register: container_status
+      until: container_status.stdout == "running"
+      retries: 5
+      delay: 2
