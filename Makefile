@@ -359,7 +359,10 @@ ansible-deploy:
 	if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then EXTRA_VARS="$$EXTRA_VARS -e tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"; fi; \
 	if [ -n "$(REPO_URL)" ]; then EXTRA_VARS="$$EXTRA_VARS -e repo_url=$(REPO_URL)"; fi; \
 	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
-	ansible-playbook $(ANSIBLE_INVENTORY) ansible/playbook.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+	echo "📦 Phase 1: Provisioning System & Hardware..." && \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/provision.yml $$EXTRA_VARS $(ANSIBLE_ARGS) && \
+	echo "🚀 Phase 2: Deploying Application..." && \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/deploy.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
 
 ansible-test:
 	@if [ -z "$(COMPONENT)" ]; then \

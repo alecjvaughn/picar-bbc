@@ -1,50 +1,13 @@
 ---
-- name: Configure Picar-BBC on Raspberry Pi
+- name: Deploy Picar Application
   hosts: "{{ target_hosts | default('picar') }}"
   become: true
   vars:
-    # Update this URL to your repository
     repo_url: "https://github.com/your-username/picar-bbc.git"
     project_dir: "/home/{{ ansible_user }}/picar-bbc"
-    # Pass via --extra-vars "tunnel_token=..." or set env var locally
     tunnel_token: "{{ lookup('env', 'CLOUDFLARED_TUNNEL_TOKEN') | default('') }}"
 
   tasks:
-    - name: Update apt cache and upgrade packages
-      apt:
-        update_cache: yes
-        upgrade: dist
-        cache_valid_time: 3600
-
-    - name: Install system dependencies
-      apt:
-        name:
-          - git
-          - make
-          - curl
-          - gnupg
-          - i2c-tools
-          - python3-pip
-          - python3-venv
-        state: present
-
-    - name: Install Docker
-      shell: curl -fsSL https://get.docker.com | sh
-      args:
-        creates: /usr/bin/docker
-
-    - name: Add user to docker group
-      user:
-        name: "{{ ansible_user }}"
-        groups: docker
-        append: yes
-
-    - name: Reset connection to apply group changes
-      meta: reset_connection
-
-    - name: Configure Raspberry Pi Interfaces
-      include_tasks: configure_pi.yml
-
     - name: Clone Project Repository
       git:
         repo: "{{ repo_url }}"
@@ -75,7 +38,3 @@
       environment:
         CLOUDFLARED_TUNNEL_TOKEN: "{{ tunnel_token }}"
       when: tunnel_token | length > 0
-
-  handlers:
-    - name: Reboot Pi
-      reboot:
