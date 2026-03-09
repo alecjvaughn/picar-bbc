@@ -190,7 +190,7 @@ debug-server: docker-build
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Motor-All|Non-Motor-All>"; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
@@ -284,7 +284,7 @@ ansible-deploy:
 ansible-test:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer> [DURATION=10s]"; \
+		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All> [DURATION=60s]"; \
 		exit 1; \
 	fi
 	@echo "🧪 Running hardware test via Ansible for $(COMPONENT)..."

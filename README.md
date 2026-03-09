@@ -228,6 +228,7 @@ The project includes a test suite to verify individual hardware components. This
 - **`Infrared`**: Prints line tracking sensor status (Left, Middle, Right).
 - **`Servo`**: Sweeps camera servos (pan/tilt).
 - **`ADC`**: Reads battery voltage and photoresistor values.
+- **`Battery`**: Reads battery voltage only.
 - **`Buzzer`**: Beeps for 3 seconds.
 - **`Camera`**: Tests initialization and captures a test image (`test_camera.jpg`).
 

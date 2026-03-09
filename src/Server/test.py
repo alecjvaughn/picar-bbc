@@ -138,6 +138,22 @@ def test_Adc(duration=None):
     except KeyboardInterrupt:
         print ("\nEnd of program")
 
+def test_Battery(duration=None):
+    import time
+    from adc import ADC
+    adc = ADC()
+    start_time = time.time()
+    try:
+        print ("Program is starting ...")
+        while True:
+            if duration and (time.time() - start_time > duration):
+                break
+            Power = adc.read_adc(2) * (3 if adc.pcb_version == 1 else 2)
+            print ("The battery voltage is "+str(Power)+"V")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print ("\nEnd of program")
+
 def test_Buzzer():
     import time
     from buzzer import Buzzer
@@ -193,6 +209,8 @@ def test_Non_Motor_All():
     test_Infrared(duration=5)
     print(">> Testing ADC (5s)...")
     test_Adc(duration=5)
+    print(">> Testing Battery (5s)...")
+    test_Battery(duration=5)
 
 # Main program logic follows:
 if __name__ == '__main__':
@@ -213,6 +231,8 @@ if __name__ == '__main__':
         test_Servo()               
     elif sys.argv[1] == 'ADC':   
         test_Adc()  
+    elif sys.argv[1] == 'Battery':
+        test_Battery()
     elif sys.argv[1] == 'Buzzer':   
         test_Buzzer()  
     elif sys.argv[1] == 'Camera':
