@@ -10,8 +10,7 @@ from unittest.mock import MagicMock
 # Mock hardware modules for local testing if they are missing
 def mock_hardware():
     modules = [
-        'rpi_ws281x', 'smbus', 'picamera2', 'picamera2.encoders',
-        'picamera2.outputs', 'libcamera', 'spidev', 'fcntl'
+        'rpi_ws281x', 'smbus', 'spidev', 'fcntl'
     ]
     # Force mocks if running in Docker container to avoid hardware access crashes
     force_mock = os.environ.get('CONTAINER') == 'true'
@@ -481,14 +480,3 @@ if __name__ == '__main__':
         # Handle Ctrl+C gracefully
         signal.signal(signal.SIGINT, server_window.signal_handler)
         
-        # Keep the application running
-        try:
-            sys.exit(app.exec_())
-        except KeyboardInterrupt:
-            server_window.close_application()
-            sys.exit(0)
-    else:
-        # Run with GUI (existing behavior)
-        myshow = mywindow()
-        myshow.show()
-        sys.exit(myshow.app.exec_())

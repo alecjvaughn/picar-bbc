@@ -23,8 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb-cursor0 \
     libgl1-mesa-glx \
     libglib2.0-0 \
-    python3-picamera2 \
-    libcamera-apps \
+    python3-smbus \
+    python3-spidev \
     && curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb \
     && dpkg -i cloudflared.deb \
     && rm cloudflared.deb \

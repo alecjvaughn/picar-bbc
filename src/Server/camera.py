@@ -1,95 +1,124 @@
+import cv2
 import time
-from picamera2 import Picamera2, Preview
-from picamera2.encoders import H264Encoder, JpegEncoder
-from picamera2.outputs import FileOutput
-from libcamera import Transform
-from threading import Condition
-import io
-
-class StreamingOutput(io.BufferedIOBase):
-    def __init__(self):
-        """Initialize the StreamingOutput class."""
-        self.frame = None
-        self.condition = Condition()  # Initialize the condition variable for thread synchronization
-
-    def write(self, buf: bytes) -> int:
-        """Write a buffer to the frame and notify all waiting threads."""
-        with self.condition:
-            self.frame = buf             # Update the frame buffer with new data
-            self.condition.notify_all()  # Notify all waiting threads that new data is available
-        return len(buf)
+import numpy as np
 
 class Camera:
     def __init__(self, preview_size: tuple = (640, 480), hflip: bool = False, vflip: bool = False, stream_size: tuple = (400, 300)):
-        """Initialize the Camera class."""
-        self.camera = Picamera2()  # Initialize the Picamera2 object
-        self.transform = Transform(hflip=1 if hflip else 0, vflip=1 if vflip else 0)  # Set the transformation for flipping the image
-        preview_config = self.camera.create_preview_configuration(main={"size": preview_size}, transform=self.transform)  # Create the preview configuration
-        self.camera.configure(preview_config)  # Configure the camera with the preview settings
+        """Initialize the Camera class using OpenCV."""
+        self.cap = None
+        self.preview_size = preview_size
+        self.stream_size = stream_size
+        self.hflip = hflip
+        self.vflip = vflip
+        self.streaming = False
+        self.recording = False
+        self.video_writer = None
+
+    def _open_camera(self, size: tuple):
+        """Internal method to open the camera with a specific resolution."""
+        if self.cap is not None and self.cap.isOpened():
+            return
         
-        # Configure video stream
-        self.stream_size = stream_size  # Set the size of the video stream
-        self.stream_config = self.camera.create_video_configuration(main={"size": stream_size}, transform=self.transform)  # Create the video configuration
-        self.streaming_output = StreamingOutput()  # Initialize the streaming output object
-        self.streaming = False  # Initialize the streaming flag
+        # Open default camera (index 0)
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            print("Error: Could not open video device.")
+            return
+
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, size[0])
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, size[1])
 
     def start_image(self, show_preview: bool = False) -> None:
-        """Start the camera preview and capture."""
-        if show_preview:
-            self.camera.start_preview(Preview.QTGL)  # Start the camera preview using the QTGL backend
-        self.camera.start()                      # Start the camera
+        """Start the camera (OpenCV VideoCapture)."""
+        self._open_camera(self.preview_size)
+        # Note: show_preview is ignored in headless/server context to avoid X11 errors.
 
     def save_image(self, filename: str) -> dict:
         """Capture and save an image to the specified file."""
-        try:
-            metadata = self.camera.capture_file(filename)  # Capture an image and save it to the specified file
-            return metadata                              # Return the metadata of the captured image
-        except Exception as e:
-            print(f"Error capturing image: {e}")         # Print error message if capturing fails
-            return None                                  # Return None if capturing fails
+        if self.cap is None or not self.cap.isOpened():
+            self._open_camera(self.preview_size)
+        
+        # Read a few frames to allow auto-exposure to settle
+        for _ in range(5):
+            self.cap.read()
+            
+        ret, frame = self.cap.read()
+        if ret:
+            if self.hflip:
+                frame = cv2.flip(frame, 1)
+            if self.vflip:
+                frame = cv2.flip(frame, 0)
+            cv2.imwrite(filename, frame)
+            return {"filename": filename}
+        else:
+            print("Error: Could not read frame.")
+            return None
 
     def start_stream(self, filename: str = None) -> None:
         """Start the video stream or recording."""
-        if not self.streaming:
-            if self.camera.started:
-                self.camera.stop()                         # Stop the camera if it is currently running
-            
-            self.camera.configure(self.stream_config)      # Configure the camera with the video stream settings
-            if filename:
-                encoder = H264Encoder()                    # Use H264 encoder for video recording
-                output = FileOutput(filename)              # Set the output file for the recorded video
-            else:
-                encoder = JpegEncoder()                    # Use Jpeg encoder for streaming
-                output = FileOutput(self.streaming_output) # Set the streaming output object
-            self.camera.start_recording(encoder, output)   # Start recording or streaming
-            self.streaming = True                          # Set the streaming flag to True
+        # Re-open or re-configure for stream size
+        if self.cap is not None and self.cap.isOpened():
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.stream_size[0])
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.stream_size[1])
+        else:
+            self._open_camera(self.stream_size)
+
+        self.streaming = True
+        
+        if filename:
+            self.recording = True
+            # Define the codec and create VideoWriter object
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+            w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.video_writer = cv2.VideoWriter(filename, fourcc, 20.0, (w, h))
 
     def stop_stream(self) -> None:
         """Stop the video stream or recording."""
-        if self.streaming:
-            try:
-                self.camera.stop_recording()               # Stop the recording or streaming
-                self.streaming = False                     # Set the streaming flag to False
-            except Exception as e:
-                print(f"Error stopping stream: {e}")       # Print error message if stopping fails
+        self.streaming = False
+        self.recording = False
+        if self.video_writer:
+            self.video_writer.release()
+            self.video_writer = None
 
     def get_frame(self) -> bytes:
         """Get the current frame from the streaming output."""
-        with self.streaming_output.condition:
-            self.streaming_output.condition.wait()         # Wait for a new frame to be available
-            return self.streaming_output.frame             # Return the current frame
+        if self.cap is None or not self.cap.isOpened():
+            return b''
+            
+        ret, frame = self.cap.read()
+        if not ret:
+            return b''
+            
+        if self.hflip:
+            frame = cv2.flip(frame, 1)
+        if self.vflip:
+            frame = cv2.flip(frame, 0)
+            
+        if self.recording and self.video_writer:
+            self.video_writer.write(frame)
+            
+        # Encode to JPEG for streaming
+        ret, jpeg = cv2.imencode('.jpg', frame)
+        if ret:
+            return jpeg.tobytes()
+        return b''
 
     def save_video(self, filename: str, duration: int = 10) -> None:
         """Save a video for the specified duration."""
-        self.start_stream(filename)                        # Start the video recording
-        time.sleep(duration)                               # Record for the specified duration
-        self.stop_stream()                                 # Stop the video recording
+        self.start_stream(filename)
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            self.get_frame() # Triggers read and write
+            time.sleep(0.05)
+        self.stop_stream()
 
     def close(self) -> None:
         """Close the camera."""
-        if self.streaming:
-            self.stop_stream()                             # Stop the streaming if it is active
-        self.camera.close()                                # Close the camera
+        if self.cap and self.cap.isOpened():
+            self.cap.release()
+        if self.video_writer:
+            self.video_writer.release()
 
 if __name__ == '__main__':
     print('Program is starting ... ')                    # Print a message indicating the start of the program
