@@ -150,7 +150,7 @@ def test_Camera():
         print ("Program is starting ...")
         camera = Camera()
         print ("Camera initialized. Starting preview for 5 seconds...")
-        camera.start_image()
+        camera.start_image(show_preview=True)
         time.sleep(5)
         print ("Capturing test image to 'test_camera.jpg'...")
         camera.save_image("test_camera.jpg")

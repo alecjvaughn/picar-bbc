@@ -85,6 +85,7 @@ help:
 	@echo "  make docker-run-tunnel   : Run Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN)"
 	@echo "  make debug-server        : Run server in foreground"
 	@echo "  make test-hardware       : Run hardware component tests (stops server)"
+	@echo "  make docker-prune        : Remove all stopped containers, dangling images, and unused networks"
 	@echo "  make logs                : View server logs"
 	@echo ""
 	@echo "Ansible Workflow:"
@@ -146,7 +147,7 @@ tf-clean:
 # Docker Manual Workflow
 # ==============================================================================
 
-.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean logs
+.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
 
 docker-build-root:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
@@ -174,6 +175,7 @@ docker-run-server: docker-build create-network
 	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
 	docker run --rm -d --name $(SERVER_NAME) \
 		--network $(NETWORK_NAME) \
+		--privileged \
 		$(PORTS) \
 		$(SERVER_IMAGE)
 
@@ -181,7 +183,7 @@ debug-server: docker-build
 	@echo "Cleaning up old debug container..."
 	-docker rm -f $(DEBUG_SERVER_NAME) 2>/dev/null || true
 	@echo "Starting server in debug mode (foreground)..."
-	docker run --name $(DEBUG_SERVER_NAME) \
+	docker run --privileged --name $(DEBUG_SERVER_NAME) \
 		$(PORTS) \
 		$(SERVER_IMAGE)
 
@@ -244,6 +246,12 @@ docker-down:
 
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
+
+docker-prune: docker-down
+	@echo "Pruning all stopped containers, dangling images, and unused networks..."
+	docker container prune -f
+	docker image prune -f
+	docker network prune -f
 
 logs:
 	docker logs -f $(SERVER_NAME)

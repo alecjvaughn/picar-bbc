@@ -32,6 +32,7 @@
     - name: Restart Picar Server
       command: >
         docker run --rm -d --name {{ container_name }}
+        --privileged
         --network picar-net
         -p 5000:5000 -p 8000:8000
         {{ server_image }}

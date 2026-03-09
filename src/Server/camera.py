@@ -33,9 +33,10 @@ class Camera:
         self.streaming_output = StreamingOutput()  # Initialize the streaming output object
         self.streaming = False  # Initialize the streaming flag
 
-    def start_image(self) -> None:
+    def start_image(self, show_preview: bool = False) -> None:
         """Start the camera preview and capture."""
-        self.camera.start_preview(Preview.QTGL)  # Start the camera preview using the QTGL backend
+        if show_preview:
+            self.camera.start_preview(Preview.QTGL)  # Start the camera preview using the QTGL backend
         self.camera.start()                      # Start the camera
 
     def save_image(self, filename: str) -> dict:
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     camera = Camera()                                    # Create a Camera instance
 
     print("View image...")
-    camera.start_image()                                 # Start the camera preview
+    camera.start_image(show_preview=True)                # Start the camera preview
     time.sleep(10)                                       # Wait for 10 seconds
     
     print("Capture image...")

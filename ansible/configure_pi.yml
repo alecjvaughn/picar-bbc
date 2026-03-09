@@ -1,0 +1,27 @@
+---
+- name: Enable I2C interface
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtparam=i2c_arm='
+    line: dtparam=i2c_arm=on
+    create: yes
+  notify: Reboot Pi
+
+- name: Enable SPI interface
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtparam=spi='
+    line: dtparam=spi=on
+    create: yes
+  notify: Reboot Pi
+
+- name: Enable Camera interface
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: "^{{ item.regexp }}"
+    line: "{{ item.line }}"
+    create: yes
+  loop:
+    - { regexp: 'camera_auto_detect=', line: 'camera_auto_detect=1' }
+    - { regexp: 'gpu_mem=', line: 'gpu_mem=128' }
+  notify: Reboot Pi
