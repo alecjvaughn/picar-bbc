@@ -217,6 +217,35 @@ To control the robot using the desktop GUI client:
     -   **Local**: Enter `picar.local` or the IP address.
     -   **Remote**: Enter your Cloudflare domain (e.g., `robot.yourdomain.com`).
 
+## Hardware Testing
+
+The project includes a test suite to verify individual hardware components. This is useful for debugging wiring or sensor issues.
+
+### Available Components
+- **`Led`**: Cycles through RGB colors on the WS2812B strip.
+- **`Motor`**: Tests forward, backward, left, right, and stop.
+- **`Ultrasonic`**: Prints distance readings (cm).
+- **`Infrared`**: Prints line tracking sensor status (Left, Middle, Right).
+- **`Servo`**: Sweeps camera servos (pan/tilt).
+- **`ADC`**: Reads battery voltage and photoresistor values.
+- **`Battery`**: Reads battery voltage only.
+- **`Buzzer`**: Beeps for 3 seconds.
+- **`Camera`**: Tests initialization and captures a test image (`test_camera.jpg`).
+
+### 1. Manual Testing (On the Pi)
+If you are SSH'd into the Pi, you can run tests using Docker. This will temporarily stop the main server to free up hardware resources.
+
+```bash
+make test-hardware COMPONENT=Led
+```
+
+### 2. Remote Testing (Ansible)
+You can trigger tests from your control computer without SSHing into the Pi.
+
+```bash
+make ansible-test COMPONENT=Servo RESTART=true
+```
+
 ## Project Structure
 
 - **`src/Client/`**: PyQt5 GUI application code.

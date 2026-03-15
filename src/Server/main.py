@@ -10,11 +10,12 @@ from unittest.mock import MagicMock
 # Mock hardware modules for local testing if they are missing
 def mock_hardware():
     modules = [
-        'rpi_ws281x', 'smbus', 'picamera2', 'picamera2.encoders',
-        'picamera2.outputs', 'libcamera', 'spidev', 'fcntl'
+        'rpi_ws281x', 'smbus', 'spidev', 'fcntl'
     ]
-    # Force mocks if running in Docker container to avoid hardware access crashes
-    force_mock = os.environ.get('CONTAINER') == 'true'
+    # Check if we are on a Raspberry Pi (Device Tree Model file exists)
+    is_pi = os.path.exists('/sys/firmware/devicetree/base/model')
+    # Force mocks ONLY if we are in a container AND NOT on a Pi (e.g. Mac/PC)
+    force_mock = os.environ.get('CONTAINER') == 'true' and not is_pi
 
     for mod in modules:
         try:
@@ -31,8 +32,7 @@ def mock_hardware():
     # This prevents BadPinFactory errors on macOS/Windows
     try:
         # Check if we are in a container OR not on a Pi
-        is_container = os.environ.get('CONTAINER') == 'true'
-        if is_container or not os.path.exists('/proc/cpuinfo'):
+        if not is_pi:
             import gpiozero
             from gpiozero.pins.mock import MockFactory
             from gpiozero import Device
@@ -79,6 +79,9 @@ class mywindow(QMainWindow, Ui_server_ui):
         self.tcp_server = Server()
         self.command = Command()
         self.led = Led()
+        # Explicitly turn off LEDs on startup to ensure a clean state
+        if self.led.is_support_led_function:
+            self.led.colorBlink(0)
         self.car = Car()
         self.buzzer = Buzzer()
         self.camera = Camera(stream_size=(400, 300))
@@ -481,14 +484,3 @@ if __name__ == '__main__':
         # Handle Ctrl+C gracefully
         signal.signal(signal.SIGINT, server_window.signal_handler)
         
-        # Keep the application running
-        try:
-            sys.exit(app.exec_())
-        except KeyboardInterrupt:
-            server_window.close_application()
-            sys.exit(0)
-    else:
-        # Run with GUI (existing behavior)
-        myshow = mywindow()
-        myshow.show()
-        sys.exit(myshow.app.exec_())

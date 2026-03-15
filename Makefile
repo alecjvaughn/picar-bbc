@@ -84,13 +84,24 @@ help:
 	@echo "  make docker-run-client   : Run client container manually"
 	@echo "  make docker-run-tunnel   : Run Cloudflare tunnel (requires CLOUDFLARED_TUNNEL_TOKEN)"
 	@echo "  make debug-server        : Run server in foreground"
+	@echo "  make docker-prune        : Remove all stopped containers, dangling images, and unused networks"
 	@echo "  make logs                : View server logs"
+	@echo ""
+	@echo "Testing & Hardware Control:"
+	@echo "  make test-hardware       : Run hardware component tests (stops server)"
+	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
+	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
+	@echo "  make start-server-app    : Start the Python app inside container"
+	@echo "  make clear-leds          : Manually turn off LEDs (stops server)"
 	@echo ""
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
+	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
+	@echo "  make ansible-reboot      : Reboot the Pi and poll for system health"
 	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"
 	@echo "                             (Optional: ANSIBLE_ARGS='-vvv' for debug output)"
+	@echo "  make ansible-nuke        : Wipe the project directory on the Pi (Clean Slate)"
 	@echo ""
 	@echo "Local Development:"
 	@echo "  make venv                : Create/Update virtual environment"
@@ -107,12 +118,24 @@ help:
 # Terraform Workflow
 # ==============================================================================
 
-.PHONY: tf-init up down reload tf-clean
+.PHONY: tf-init tf-apply tf-destroy up down reload tf-clean ansible-reboot ansible-nuke
 
 tf-init:
 	cd $(TF_DIR) && terraform init
 
-up: tf-init
+up:
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "🍓 Raspberry Pi detected. Switching to Docker Manual Workflow (Server Only)..."; \
+		$(MAKE) docker-run-server; \
+		if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
+			echo "🚇 Starting Cloudflare Tunnel..."; \
+			$(MAKE) docker-run-tunnel; \
+		fi; \
+	else \
+		$(MAKE) tf-apply; \
+	fi
+
+tf-apply: tf-init
 	@if [ -n "$(LOCAL_RASPI_CONNECTION)" ]; then \
 		echo "🚀 Deploying to REMOTE host: $(LOCAL_RASPI_CONNECTION)"; \
 	else \
@@ -128,6 +151,14 @@ up: tf-init
 	cd $(TF_DIR) && terraform apply -auto-approve -var="tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"
 
 down:
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "🍓 Raspberry Pi detected. Stopping manual containers..."; \
+		$(MAKE) docker-down; \
+	else \
+		$(MAKE) tf-destroy; \
+	fi
+
+tf-destroy:
 	cd $(TF_DIR) && terraform destroy -auto-approve
 	@echo "Cleaning up dangling images and networks..."
 	-docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) 2>/dev/null || true
@@ -144,13 +175,23 @@ tf-clean:
 # Docker Manual Workflow
 # ==============================================================================
 
-.PHONY: docker-build docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean logs
+.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
 
-docker-build:
+docker-build-root:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
+
+docker-build-middleware: docker-build-root
 	docker build $(BUILD_ARGS) -t $(MIDDLEWARE_IMAGE) -f docker/images/middleware/Dockerfile .
+
+docker-build-server: docker-build-middleware
 	docker build $(BUILD_ARGS) -t $(SERVER_IMAGE) -f docker/images/server/Dockerfile .
+
+docker-build-client: docker-build-middleware
 	docker build $(BUILD_ARGS) -t $(CLIENT_IMAGE) -f docker/images/client/Dockerfile .
+
+docker-build: docker-build-server
+
+docker-build-all: docker-build-server docker-build-client
 
 docker-rebuild:
 	$(MAKE) docker-build BUILD_ARGS="--no-cache"
@@ -160,18 +201,38 @@ create-network:
 
 docker-run-server: docker-build create-network
 	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
+	@# Aggressively kill anything on ports 5000/8000 (use with caution)
+	-sudo fuser -k 5000/tcp 2>/dev/null || true
+	-sudo fuser -k 8000/tcp 2>/dev/null || true
 	docker run --rm -d --name $(SERVER_NAME) \
 		--network $(NETWORK_NAME) \
+		--privileged \
+		-u root \
 		$(PORTS) \
-		$(SERVER_IMAGE)
+		$(SERVER_IMAGE) \
+		/bin/bash -c "python3 main.py --no-gui; tail -f /dev/null"
 
 debug-server: docker-build
 	@echo "Cleaning up old debug container..."
 	-docker rm -f $(DEBUG_SERVER_NAME) 2>/dev/null || true
 	@echo "Starting server in debug mode (foreground)..."
-	docker run --name $(DEBUG_SERVER_NAME) \
+	docker run --privileged --name $(DEBUG_SERVER_NAME) \
+		-u root \
 		$(PORTS) \
 		$(SERVER_IMAGE)
+
+stop-server-app:
+	@echo "🛑 Killing Python server process (Container $(SERVER_NAME) will remain up)..."
+	-docker exec -u root $(SERVER_NAME) pkill -f "python3 main.py"
+
+start-server-app:
+	@echo "▶️  Starting Python server process in background..."
+	docker exec -u root -d $(SERVER_NAME) python3 main.py --no-gui
+
+clear-leds:
+	@echo "🧹 Clearing LEDs..."
+	$(MAKE) stop-server-app
+	docker exec -u root $(SERVER_NAME) python3 test.py Led-Off
 
 x11-setup:
 	@echo "Configuring X11..."
@@ -189,7 +250,7 @@ x11-setup:
 		fi; \
 	fi
 
-docker-run-client: docker-build x11-setup
+docker-run-client: docker-build-client x11-setup
 	@echo "Starting client..."
 	docker run --rm -it --name $(CLIENT_NAME) \
 		-e DISPLAY=host.docker.internal:0 \
@@ -216,8 +277,67 @@ docker-down:
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
 
+docker-prune: docker-down
+	@echo "Pruning all stopped containers, dangling images, and unused networks..."
+	docker container prune -f
+	docker image prune -f
+	docker network prune -f
+
 logs:
 	docker logs -f $(SERVER_NAME)
+
+# ==============================================================================
+# Testing Workflow
+# ==============================================================================
+
+.PHONY: docker-run-test test-hardware test-exec
+
+# Non-interactive test runner for automation/Ansible
+docker-run-test:
+	docker run --rm --privileged \
+		-u root \
+		--device /dev/i2c-1 \
+		--device /dev/video0 \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		-v /run/udev:/run/udev:ro \
+		-v /tmp:/tmp \
+		$(SERVER_IMAGE) \
+		python test.py $(COMPONENT)
+
+test-hardware:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		exit 1; \
+	fi
+	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
+	-docker stop $(SERVER_NAME) 2>/dev/null || true
+	@echo "🧪 Running hardware test for $(COMPONENT)..."
+	docker run --rm -it --privileged \
+		-u root \
+		--device /dev/i2c-1 \
+		--device /dev/video0 \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		-v /run/udev:/run/udev:ro \
+		-v /tmp:/tmp \
+		$(SERVER_IMAGE) \
+		python test.py $(COMPONENT)
+	@if [ "$(RESTART)" = "true" ]; then \
+		echo "🔄 Restarting $(SERVER_NAME)..."; \
+		$(MAKE) docker-run-server; \
+	fi
+
+test-exec:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		exit 1; \
+	fi
+	@echo "⚠️  Running test inside the ACTIVE $(SERVER_NAME) container..."
+	@echo "    Note: This may conflict with the running server (e.g. Camera busy, LEDs overwriting)."
+	docker exec -u root -it $(SERVER_NAME) python3 test.py $(COMPONENT)
 
 # ==============================================================================
 # Ansible Workflow
@@ -241,7 +361,35 @@ ansible-deploy:
 	if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then EXTRA_VARS="$$EXTRA_VARS -e tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"; fi; \
 	if [ -n "$(REPO_URL)" ]; then EXTRA_VARS="$$EXTRA_VARS -e repo_url=$(REPO_URL)"; fi; \
 	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
-	ansible-playbook $(ANSIBLE_INVENTORY) ansible/playbook.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+	echo "📦 Phase 1: Provisioning System & Hardware..." && \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/provision.yml $$EXTRA_VARS $(ANSIBLE_ARGS) && \
+	echo "🚀 Phase 2: Deploying Application..." && \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/deploy.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+
+ansible-test:
+	@if [ -z "$(COMPONENT)" ]; then \
+		echo "Error: COMPONENT argument is required."; \
+		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All> [DURATION=60s]"; \
+		exit 1; \
+	fi
+	@echo "🧪 Running hardware test via Ansible for $(COMPONENT)..."
+	@EXTRA_VARS="-e component=$(COMPONENT) -e server_image=$(SERVER_IMAGE)"; \
+	if [ -n "$(DURATION)" ]; then EXTRA_VARS="$$EXTRA_VARS -e test_duration=$(DURATION)"; fi; \
+	if [ -n "$(RESTART)" ]; then EXTRA_VARS="$$EXTRA_VARS -e restart=$(RESTART)"; fi; \
+	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+
+ansible-reboot:
+	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
+	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/reboot.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+
+ansible-nuke:
+	@echo "☢️  Nuking project directory on $(ANSIBLE_TARGET_HOSTS)..."
+	@read -p "Are you sure you want to delete the project directory on the remote host? [y/N] " ans && [ $${ans:-N} = y ]
+	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
+	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
+	ansible-playbook $(ANSIBLE_INVENTORY) ansible/nuke.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
 
 # ==============================================================================
 # Local Development
@@ -262,8 +410,10 @@ install:
 		. venv/bin/activate && pip install -r requirements.tmp; \
 		rm requirements.tmp; \
 	else \
-		echo "Non-RPi OS detected. Installing all requirements..."; \
-		. venv/bin/activate && pip install -r src/requirements.txt; \
+		echo "Non-RPi OS detected. Installing requirements (excluding hardware libs)..."; \
+		grep -v -e "rpi-ws281x" src/requirements.txt > requirements.tmp; \
+		. venv/bin/activate && pip install -r requirements.tmp; \
+		rm requirements.tmp; \
 	fi
 
 rebuild-hardware:

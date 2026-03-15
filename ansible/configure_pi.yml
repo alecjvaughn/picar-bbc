@@ -1,0 +1,64 @@
+---
+- name: Enable I2C interface
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtparam=i2c_arm='
+    line: dtparam=i2c_arm=on
+    create: yes
+  notify: Reboot Pi
+
+- name: Enable SPI interface
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtparam=spi='
+    line: dtparam=spi=on
+    create: yes
+  notify: Reboot Pi
+
+- name: Configure Camera settings (Libcamera / Auto Detect)
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: "^{{ item.regexp }}"
+    line: "{{ item.line }}"
+    create: yes
+  loop:
+    - { regexp: 'camera_auto_detect=', line: 'camera_auto_detect=1' }
+    - { regexp: 'start_x=', line: 'start_x=0' }
+    - { regexp: 'gpu_mem=', line: 'gpu_mem=128' }
+  notify: Reboot Pi
+
+- name: Get Raspberry Pi model for conditional audio configuration
+  command: cat /sys/firmware/devicetree/base/model
+  register: pi_model_output
+  changed_when: false
+  check_mode: no # Always run this to get the model, even in check mode
+
+- name: Blacklist onboard audio kernel module (for older Pis)
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/snd-blacklist.conf
+    line: blacklist snd_bcm2835
+    create: yes
+  when: "'Raspberry Pi 5' not in pi_model_output.stdout and 'Raspberry Pi 4' not in pi_model_output.stdout and 'Raspberry Pi 400' not in pi_model_output.stdout"
+  notify: Reboot Pi
+
+- name: Remove manual camera overlays (Conflict with auto-detect)
+  lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtoverlay=ov5647'
+    state: absent
+  notify: Reboot Pi
+
+- name: Verify I2C devices (PCA9685 and ADC) are present
+  shell: i2cdetect -y 1
+  register: i2c_scan
+  changed_when: false
+  failed_when: "'40' not in i2c_scan.stdout or '48' not in i2c_scan.stdout"
+
+- name: Disable onboard audio in boot config (for older Pis)
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtparam=audio='
+    line: dtparam=audio=off
+    create: yes
+  when: "'Raspberry Pi 5' not in pi_model_output.stdout and 'Raspberry Pi 4' not in pi_model_output.stdout and 'Raspberry Pi 400' not in pi_model_output.stdout"
+  notify: Reboot Pi

@@ -9,8 +9,7 @@ class ParameterManager:
 
     def __init__(self):
         # Initialize the file path to the default parameter file
-        if self.file_exists() == False or self.validate_params() == False:
-            self.deal_with_param()
+        self.deal_with_param()
 
     def file_exists(self, file_path: str = PARAM_FILE) -> bool:
         """Check if the specified file exists."""
@@ -68,6 +67,7 @@ class ParameterManager:
 
     def create_param_file(self, file_path: str = PARAM_FILE) -> None:
         """Create a parameter file and set default parameters."""
+        print("Creating default parameter file...")
         default_params = {
             'Connect_Version': 2,
             'Pcb_Version': 1,
@@ -94,45 +94,16 @@ class ParameterManager:
             return 1
 
     def deal_with_param(self) -> None:
-        """Main function to manage parameter file."""
-        # Check if running in container
-        is_container = os.environ.get('CONTAINER') == 'true'
-
+        """
+        Checks for a valid parameter file. If it's missing or invalid,
+        it creates a new one with safe defaults. This is non-interactive
+        to support headless/Docker operation.
+        """
         if not self.file_exists() or not self.validate_params():
-            print(f"Parameter file {self.PARAM_FILE} does not exist or contains invalid parameters.")
-            if is_container:
-                print("Running in container: Creating default parameter file.")
-                self.create_param_file()
-                return
-            user_input_required = True
-        else:
-            if is_container:
-                return
-            user_choice = input("Do you want to re-enter the parameters? (yes/no): ").strip().lower()
-            user_input_required = user_choice == 'yes'
-
-        if user_input_required:
-            connect_version = self.get_valid_input("Enter Connect Version (1 or 2): ", [1, 2])
-            pcb_version = self.get_valid_input("Enter PCB Version (1 or 2): ", [1, 2])
-            pi_version = self.get_raspberry_pi_version()
+            print(f"WARNING: Parameter file '{self.PARAM_FILE}' not found or invalid.")
             self.create_param_file()
-            self.set_param('Connect_Version', connect_version)
-            self.set_param('Pcb_Version', pcb_version)
-            self.set_param('Pi_Version', pi_version)
         else:
-            print("Do not modify the hardware version. Skipping...")
-
-    def get_valid_input(self, prompt: str, valid_values: list) -> any:
-        """Get valid input from the user."""
-        while True:
-            try:
-                value = int(input(prompt))
-                if value in valid_values:
-                    return value
-                else:
-                    print(f"Invalid input. Please enter one of {valid_values}.")
-            except ValueError:
-                print("Invalid input. Please enter a number.")
+            print(f"Using existing parameter file: '{self.PARAM_FILE}'")
 
     def get_connect_version(self) -> int:
         """Get the Connect version from the parameter file."""
@@ -145,15 +116,3 @@ class ParameterManager:
     def get_pi_version(self) -> int:
         """Get the Raspberry Pi version from the parameter file."""
         return self.get_param('Pi_Version')
-
-if __name__ == '__main__':
-    # Entry point of the script
-    manager = ParameterManager()
-    manager.deal_with_param()
-    if manager.file_exists("params.json") and manager.validate_params("params.json"):
-        connect_version = manager.get_connect_version()
-        print(f"Connect Version: {connect_version}.0")
-        pcb_version = manager.get_pcb_version()
-        print(f"PCB Version: {pcb_version}.0")
-        pi_version = manager.get_pi_version()
-        print(f"Raspberry PI version is {'less than 5' if pi_version == 1 else '5'}.")

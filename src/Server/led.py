@@ -17,11 +17,19 @@ class Led:
         # Set up the LED strip based on PCB and Raspberry Pi versions
         if self.connect_version == 1 and self.pi_version == 1:
             self.strip = Freenove_RPI_WS281X(8, 255, 'RGB')
-            self.is_support_led_function = True
+            # Check initialization state (1 is success)
+            if self.strip.check_rpi_ws281x_state() != 0:
+                self.is_support_led_function = True
+            else:
+                self.is_support_led_function = False
 
         elif self.connect_version == 2 and (self.pi_version == 1 or self.pi_version == 2):
             self.strip = Freenove_SPI_LedPixel(8, 255, 'GRB')
-            self.is_support_led_function = True
+            # Check initialization state (1 is success)
+            if self.strip.check_spi_state() != 0:
+                self.is_support_led_function = True
+            else:
+                self.is_support_led_function = False
 
         elif self.connect_version == 1 and self.pi_version == 2:
             # Print an error message and disable LED function if unsupported combination

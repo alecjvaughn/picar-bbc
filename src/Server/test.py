@@ -2,6 +2,8 @@ def test_Led():
     import time
     from led import Led
     led=Led()
+    if not led.is_support_led_function:
+        raise RuntimeError("LED initialization failed. Check hardware configuration (SPI/GPIO) and permissions.")
     try:
         led.ledIndex(0x01, 255,   0,   0)      #Red
         led.ledIndex(0x02, 255, 125,   0)      #orange
@@ -19,6 +21,13 @@ def test_Led():
         led.colorBlink(0)  #turn off the light
         print ("\nEnd of program") 
         
+def test_Led_Off():
+    from led import Led
+    led = Led()
+    if led.is_support_led_function:
+        led.colorBlink(0)
+    print("LEDs cleared.")
+
 def test_Motor(): 
     import time
     from motor import Ordinary_Car  
@@ -43,14 +52,17 @@ def test_Motor():
     finally:
         PWM.close() # Close the PWM instance
 
-def test_Ultrasonic():
+def test_Ultrasonic(duration=None):
     import time
     from ultrasonic import Ultrasonic
     # Initialize the Ultrasonic instance with default pin numbers and max distance
     ultrasonic = Ultrasonic()
+    start_time = time.time()
     try:
         print("Program is starting ...")
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             distance = ultrasonic.get_distance()  # Get the distance measurement in centimeters
             if distance is not None:
                 print(f"Ultrasonic distance: {distance}cm")  # Print the distance measurement
@@ -60,13 +72,18 @@ def test_Ultrasonic():
     finally:
         print("\nEnd of program")  # Print an end message
 
-def test_Infrared():
+def test_Infrared(duration=None):
+    import time
     from infrared import Infrared
     # Create an Infrared object
     infrared = Infrared()
+    start_time = time.time()
     try:
+        print("Program is starting ...")
         # Continuously read and print the combined value of all infrared sensors
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             ir1_value = infrared.read_one_infrared(1)
             ir2_value = infrared.read_one_infrared(2)
             ir3_value = infrared.read_one_infrared(3)
@@ -76,18 +93,22 @@ def test_Infrared():
                 print ('Right')
             elif ir1_value == 1 and ir2_value != 1 and ir3_value != 1:
                 print ('Left')
+            time.sleep(0.1)
     except KeyboardInterrupt:
         # Close the Infrared object and print a message when interrupted
         infrared.close()
         print("\nEnd of program")
 
-def test_Servo():
+def test_Servo(duration=None):
     import time
     from servo import Servo
     servo = Servo()
+    start_time = time.time()
     try:
         print ("Program is starting ...")
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             for i in range(50,110,1):
                 servo.set_servo_pwm('0',i)
                 time.sleep(0.01)
@@ -106,13 +127,16 @@ def test_Servo():
     finally:
         print ("\nEnd of program")
         
-def test_Adc():
+def test_Adc(duration=None):
     import time
     from adc import ADC
     adc = ADC()
+    start_time = time.time()
     try:
         print ("Program is starting ...")
         while True:
+            if duration and (time.time() - start_time > duration):
+                break
             Left_IDR = adc.read_adc(0)
             print ("The photoresistor voltage on the left is "+str(Left_IDR)+"V")
             Right_IDR = adc.read_adc(1)
@@ -121,6 +145,22 @@ def test_Adc():
             print ("The battery voltage is "+str(Power)+"V")
             time.sleep(1)
             print ('\n')
+    except KeyboardInterrupt:
+        print ("\nEnd of program")
+
+def test_Battery(duration=None):
+    import time
+    from adc import ADC
+    adc = ADC()
+    start_time = time.time()
+    try:
+        print ("Program is starting ...")
+        while True:
+            if duration and (time.time() - start_time > duration):
+                break
+            Power = adc.read_adc(2) * (3 if adc.pcb_version == 1 else 2)
+            print ("The battery voltage is "+str(Power)+"V")
+            time.sleep(1)
     except KeyboardInterrupt:
         print ("\nEnd of program")
 
@@ -143,6 +183,45 @@ def test_Buzzer():
     finally:
         print ("\nEnd of program")
            
+def test_Camera():
+    import time
+    from camera import Camera
+    try:
+        print ("Program is starting ...")
+        camera = Camera()
+        print ("Camera initialized. Starting preview for 5 seconds...")
+        camera.start_image(show_preview=False)
+        time.sleep(5)
+        filename = "/tmp/test_camera.jpg"
+        print (f"Capturing test image to '{filename}'...")
+        camera.save_image(filename)
+        camera.close()
+        print ("\nEnd of program")
+    except Exception as e:
+        print (f"Camera Error: {e}")
+        print ("\nEnd of program")
+
+def test_Motor_All():
+    print("\n=== Testing All Motor Components ===")
+    print(">> Testing DC Motors...")
+    test_Motor()
+    print(">> Testing Servos (5s)...")
+    test_Servo(duration=5)
+
+def test_Non_Motor_All():
+    print("\n=== Testing All Non-Motor Components ===")
+    test_Led()
+    test_Buzzer()
+    test_Camera()
+    print(">> Testing Ultrasonic (5s)...")
+    test_Ultrasonic(duration=5)
+    print(">> Testing Infrared (5s)...")
+    test_Infrared(duration=5)
+    print(">> Testing ADC (5s)...")
+    test_Adc(duration=5)
+    print(">> Testing Battery (5s)...")
+    test_Battery(duration=5)
+
 # Main program logic follows:
 if __name__ == '__main__':
     print ('Program is starting ... ')
@@ -150,20 +229,31 @@ if __name__ == '__main__':
     if len(sys.argv)<2:
         print ("Parameter error: Please assign the device")
         exit() 
+    # Clear LEDs before any test starts
+    from led import Led
+    led_pre_test_clear = Led()
+    if led_pre_test_clear.is_support_led_function: led_pre_test_clear.colorBlink(0)
     if sys.argv[1] == 'Led':
         test_Led()
+    elif sys.argv[1] == 'Led-Off':
+        test_Led_Off()
     elif sys.argv[1] == 'Motor':
         test_Motor()
     elif sys.argv[1] == 'Ultrasonic':
         test_Ultrasonic()
     elif sys.argv[1] == 'Infrared':
-        test_Infrared()        
+        test_Infrared(duration=10)
     elif sys.argv[1] == 'Servo': 
         test_Servo()               
     elif sys.argv[1] == 'ADC':   
-        test_Adc()  
+        test_Adc(duration=10)
+    elif sys.argv[1] == 'Battery':
+        test_Battery()
     elif sys.argv[1] == 'Buzzer':   
         test_Buzzer()  
-        
-        
-        
+    elif sys.argv[1] == 'Camera':
+        test_Camera()
+    elif sys.argv[1] == 'Motor-All':
+        test_Motor_All()
+    elif sys.argv[1] == 'Non-Motor-All':
+        test_Non_Motor_All()

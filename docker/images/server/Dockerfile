@@ -9,10 +9,12 @@ WORKDIR /app
 COPY --chown=secureuser:pipeline src/requirements.txt .
 
 # 3. Install Libraries
-RUN pip install --no-cache-dir -r requirements.txt
+RUN grep -v "PyQt5" requirements.txt > requirements.tmp && pip install --no-cache-dir -r requirements.tmp && rm requirements.tmp
 
 # 4. Application Logic
-COPY --chown=secureuser:pipeline src/ .
+COPY --chown=secureuser:pipeline src/Server /app/Server
+# COPY --chown=secureuser:pipeline src/Libs /app/Libs
+# Lib dependencies are installed via --system-site-packages in the virtual environment, so we don't need to copy them here. This keeps the image smaller and leverages Debian's package management for security updates.
 
 # 5. Runtime Configuration
 EXPOSE 5000

@@ -1,0 +1,15 @@
+# Version Control
+.git
+.gitignore
+
+# Local Development
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+
+# Infrastructure & Deployment (Not needed inside the container)
+infrastructure/
+ansible/
+docker/

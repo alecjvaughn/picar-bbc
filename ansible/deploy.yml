@@ -1,0 +1,52 @@
+---
+- name: Deploy Picar Application
+  hosts: "{{ target_hosts | default('picar') }}"
+  become: true
+  vars:
+    repo_url: "https://github.com/your-username/picar-bbc.git"
+    project_dir: "/home/{{ ansible_user }}/picar-bbc"
+    tunnel_token: "{{ lookup('env', 'CLOUDFLARED_TUNNEL_TOKEN') | default('') }}"
+
+  tasks:
+    - name: Clone Project Repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ project_dir }}"
+        version: main
+        force: yes
+      become: false
+      ignore_errors: no
+
+    - name: Ensure project directory exists
+      file:
+        path: "{{ project_dir }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Force Remove Existing Containers (Ensure Clean Restart)
+      command: docker rm -f picar-server picar-tunnel
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Build and Run Server (Docker)
+      community.general.make:
+        chdir: "{{ project_dir }}"
+        target: docker-run-server
+      become: false
+
+    - name: Build and Run Tunnel (Docker)
+      community.general.make:
+        chdir: "{{ project_dir }}"
+        target: docker-run-tunnel
+      become: false
+      environment:
+        CLOUDFLARED_TUNNEL_TOKEN: "{{ tunnel_token }}"
+      when: tunnel_token | length > 0
+
+    - name: Verify Server Container is Running
+      command: docker inspect -f '{{ "{{" }}.State.Status{{ "}}" }}' picar-server
+      register: container_status
+      until: container_status.stdout == "running"
+      retries: 5
+      delay: 2

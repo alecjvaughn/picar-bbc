@@ -1,0 +1,23 @@
+---
+- name: Nuke Project Directory (Clean Slate)
+  hosts: "{{ target_hosts | default('picar') }}"
+  become: true
+  vars:
+    project_dir: "/home/{{ ansible_user }}/picar-bbc"
+
+  tasks:
+    - name: Stop any running containers
+      command: docker stop picar-server picar-client picar-tunnel
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Remove project directory
+      file:
+        path: "{{ project_dir }}"
+        state: absent
+      register: nuke_result
+
+    - name: Verify removal
+      debug:
+        msg: "Directory {{ project_dir }} removed."
+      when: nuke_result.changed
