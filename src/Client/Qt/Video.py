@@ -61,7 +61,7 @@ class VideoStreaming:
     def streaming(self,ip):
         stream_bytes = b' '
         try:
-            self.client_socket.connect((ip, 8000))
+            self.client_socket.connect((ip, 8080))
             self.connection = self.client_socket.makefile('rb')
         except Exception as e:
             print("Video stream connect failed:", e)
@@ -94,7 +94,7 @@ class VideoStreaming:
 
     def socket1_connect(self,ip):
         try:
-            self.client_socket1.connect((ip, 5000))
+            self.client_socket1.connect((ip, 5050))
             self.connect_Flag=True
             print ("Connection Successful !")
         except Exception as e:

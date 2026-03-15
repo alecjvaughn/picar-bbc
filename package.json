@@ -1,5 +1,26 @@
 {
+  "name": "picar-web-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite src/Client/React",
+    "build": "vite build src/Client/React",
+    "preview": "vite preview src/Client/React"
+  },
   "dependencies": {
-    "firebase": "^12.9.0"
+    "firebase": "^12.9.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^8.55.0",
+    "vite": "^6.2.0"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
   }
 }

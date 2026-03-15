@@ -1,6 +1,7 @@
 import socket  # Import the socket module for network communication
 import fcntl   # Import the fcntl module for I/O control
 import struct  # Import the struct module for packing and unpacking data
+import queue   # Import the queue module
 from tcp_server import TCPServer  # Import the TCPServer class from the tcp_server module
 
 class Server:
@@ -26,7 +27,7 @@ class Server:
             print(f"Error getting IP address: {e}")
             return "0.0.0.0"  # Bind to all interfaces if wlan0 fails (e.g. in Docker)
 
-    def start_tcp_servers(self, command_port: int = 5000, video_port: int = 8000, max_clients: int = 1, listen_count: int = 1) -> None:
+    def start_tcp_servers(self, command_port: int = 5050, video_port: int = 8080, max_clients: int = 1, listen_count: int = 1) -> None:
         """Start the TCP servers on specified ports."""
         try:
             self.command_server.start(self.ip_address, command_port, max_clients, listen_count)  # Start the command server
@@ -82,11 +83,11 @@ class Server:
         finally:
             self.set_video_server_busy(False)
 
-    def read_data_from_command_server(self) -> 'queue.Queue':
+    def read_data_from_command_server(self) -> queue.Queue:
         """Read data from the command server's message queue."""
         return self.command_server.message_queue
 
-    def read_data_from_video_server(self) -> 'queue.Queue':
+    def read_data_from_video_server(self) -> queue.Queue:
         """Read data from the video server's message queue."""
         return self.video_server.message_queue
 
@@ -109,7 +110,7 @@ class Server:
 if __name__ == '__main__':
     print('Program is starting ... ')  # Print a message indicating the start of the program
     server = Server()              # Create an instance of the TankServer class
-    server.start_tcp_servers(5000, 8000)  # Start the TCP servers on specified ports
+    server.start_tcp_servers(5050, 8080)  # Start the TCP servers on specified ports
 
     try:
         while True:

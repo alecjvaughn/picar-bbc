@@ -142,7 +142,12 @@ If you prefer to run without Docker (e.g., for direct hardware access on the Pi 
     make run-server
     ```
 
-3.  **Run Client**:
+3.  **Run Web API**:
+    ```bash
+    make run-api
+    ```
+
+4.  **Run Client**:
     ```bash
     make run-client
     ```

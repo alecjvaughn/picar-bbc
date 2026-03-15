@@ -74,18 +74,22 @@ resource "docker_container" "app_service" {
   }
 
   ports {
-    internal = 5000
-    external = 5000
+    internal = 5050
+    external = 5050
   }
   ports {
-    internal = 8000
-    external = 8000
+    internal = 8080
+    external = 8080
+  }
+  ports {
+    internal = 5001
+    external = 5001
   }
 }
 
 # Output the correct URL for easy access
 output "application_url" {
-  value = "http://localhost:5000"
+  value = "http://localhost:5050"
 }
 
 resource "docker_container" "tunnel_service" {

@@ -16,4 +16,4 @@ COPY --chown=secureuser:pipeline src/ .
 
 # 5. Runtime Configuration
 WORKDIR /app/Client
-CMD ["python3", "Main.py"]
+CMD ["python3", "Qt/Main.py"]

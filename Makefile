@@ -27,7 +27,7 @@ CLIENT_IMAGE     := local/picar-client:latest
 
 # Networking
 NETWORK_NAME := picar-net
-PORTS        := -p 5000:5000 -p 8000:8000
+PORTS        := -p 5050:5050 -p 8080:8080 -p 5001:5001
 
 # Configuration
 CLOUDFLARED_TUNNEL_TOKEN ?=
@@ -89,6 +89,7 @@ help:
 	@echo ""
 	@echo "Testing & Hardware Control:"
 	@echo "  make test-hardware       : Run hardware component tests (stops server)"
+	@echo "  make test-all            : Run all hardware component tests locally"
 	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
 	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
 	@echo "  make start-server-app    : Start the Python app inside container"
@@ -98,6 +99,7 @@ help:
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
+	@echo "  make ansible-test-all    : Run all hardware tests sequentially via Ansible"
 	@echo "  make ansible-reboot      : Reboot the Pi and poll for system health"
 	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"
 	@echo "                             (Optional: ANSIBLE_ARGS='-vvv' for debug output)"
@@ -107,10 +109,13 @@ help:
 	@echo "  make venv                : Create/Update virtual environment"
 	@echo "  make install             : Install dependencies to venv"
 	@echo "  make run-server          : Run server locally"
+	@echo "  make run-api             : Run FastAPI middleman locally"
+	@echo "  make run-dev             : Run full local dev stack (Server + API + React Client)"
 	@echo "  make run-client          : Run client locally"
 	@echo "  make clean-install       : Clean node_modules (if applicable) and reinstall"
-	@echo "  make tunnel-control      : Open local access to remote control port (5000)"
-	@echo "  make tunnel-video        : Open local access to remote video port (8000)"
+	@echo "  make clean-terminals     : Manually clean up spawned development terminals/processes"
+	@echo "  make tunnel-control      : Open local access to remote control port (5050)"
+	@echo "  make tunnel-video        : Open local access to remote video port (8080)"
 	@echo "  make tunnels             : Spawn both tunnels in new Terminal windows (macOS)"
 	@echo "--------------------------------------------------------------------------------"
 
@@ -201,16 +206,17 @@ create-network:
 
 docker-run-server: docker-build create-network
 	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
-	@# Aggressively kill anything on ports 5000/8000 (use with caution)
-	-sudo fuser -k 5000/tcp 2>/dev/null || true
-	-sudo fuser -k 8000/tcp 2>/dev/null || true
+	@# Aggressively kill anything on ports 5050/8080 (use with caution)
+	-sudo fuser -k 5050/tcp 2>/dev/null || true
+	-sudo fuser -k 8080/tcp 2>/dev/null || true
+	-sudo fuser -k 5001/tcp 2>/dev/null || true
 	docker run --rm -d --name $(SERVER_NAME) \
 		--network $(NETWORK_NAME) \
 		--privileged \
 		-u root \
 		$(PORTS) \
 		$(SERVER_IMAGE) \
-		/bin/bash -c "python3 main.py --no-gui; tail -f /dev/null"
+		/bin/bash -c "python3 main.py --no-gui & python3 WebAPI.py"
 
 debug-server: docker-build
 	@echo "Cleaning up old debug container..."
@@ -329,6 +335,11 @@ test-hardware:
 		$(MAKE) docker-run-server; \
 	fi
 
+test-all:
+	@echo "🧪 Running ALL hardware tests locally..."
+	$(MAKE) test-hardware COMPONENT=Non-Motor-All RESTART=false
+	$(MAKE) test-hardware COMPONENT=Motor-All RESTART=true
+
 test-exec:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
@@ -379,6 +390,11 @@ ansible-test:
 	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
 	ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
 
+ansible-test-all:
+	@echo "🧪 Running ALL hardware tests via Ansible..."
+	$(MAKE) ansible-test COMPONENT=Non-Motor-All RESTART=false
+	$(MAKE) ansible-test COMPONENT=Motor-All RESTART=true
+
 ansible-reboot:
 	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
 	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
@@ -395,7 +411,7 @@ ansible-nuke:
 # Local Development
 # ==============================================================================
 
-.PHONY: clean-install install rebuild-hardware venv venv-cleanup run-server run-client
+.PHONY: clean-install install rebuild-hardware venv venv-cleanup run-server run-client clean-terminals
 
 clean-install:
 	rm -rf node_modules package-lock.json
@@ -438,22 +454,52 @@ venv-cleanup:
 run-server:
 	. venv/bin/activate && python3 src/Server/main.py --no-gui
 
+run-api:
+	. venv/bin/activate && python3 src/Server/WebAPI.py
+
+clean-terminals:
+	@echo "🧹 Cleaning up previously spawned terminals and processes..."
+	@-pkill -f "python3 src/Server/main.py" 2>/dev/null || true
+	@-pkill -f "python3 src/Server/WebAPI.py" 2>/dev/null || true
+	@-pkill -f "vite src" 2>/dev/null || true
+	@-pkill -f "cloudflared access tcp" 2>/dev/null || true
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Server")' 2>/dev/null || true; \
+		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar API")' 2>/dev/null || true; \
+		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar React")' 2>/dev/null || true; \
+		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Control Tunnel")' 2>/dev/null || true; \
+		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Video Tunnel")' 2>/dev/null || true; \
+	fi
+
+run-dev:
+	@$(MAKE) clean-terminals
+	@echo "🚀 Spawning full local development stack in separate terminals..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar Server\\007\"; cd \"$(CURDIR)\" && make run-server"'; \
+		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar API\\007\"; cd \"$(CURDIR)\" && make run-api"'; \
+		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar React\\007\"; cd \"$(CURDIR)\" && npm run dev"'; \
+	else \
+		echo "Auto-spawning terminals is only supported on macOS currently."; \
+		echo "Please run 'make run-server', 'make run-api', and 'npm run dev' manually."; \
+	fi
+
 run-client:
-	. venv/bin/activate && python3 src/Client/Main.py
+	. venv/bin/activate && python3 src/Client/Qt/Main.py
 
 tunnel-control:
-	@echo "Opening control tunnel to $(TUNNEL_HOSTNAME) on localhost:5000..."
-	cloudflared access tcp --hostname $(TUNNEL_HOSTNAME) --url localhost:5000
+	@echo "Opening control tunnel to $(TUNNEL_HOSTNAME) on localhost:5050..."
+	cloudflared access tcp --hostname $(TUNNEL_HOSTNAME) --url localhost:5050
 
 tunnel-video:
-	@echo "Opening video tunnel to $(TUNNEL_VIDEO_HOSTNAME) on localhost:8000..."
-	cloudflared access tcp --hostname $(TUNNEL_VIDEO_HOSTNAME) --url localhost:8000
+	@echo "Opening video tunnel to $(TUNNEL_VIDEO_HOSTNAME) on localhost:8080..."
+	cloudflared access tcp --hostname $(TUNNEL_VIDEO_HOSTNAME) --url localhost:8080
 
 tunnels:
+	@$(MAKE) clean-terminals
 	@echo "Spawning tunnels in separate terminals..."
 	@if [ "$$(uname)" = "Darwin" ]; then \
-		osascript -e 'tell application "Terminal" to do script "cd \"$(CURDIR)\" && make tunnel-control"'; \
-		osascript -e 'tell application "Terminal" to do script "cd \"$(CURDIR)\" && make tunnel-video"'; \
+		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar Control Tunnel\\007\"; cd \"$(CURDIR)\" && make tunnel-control"'; \
+		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar Video Tunnel\\007\"; cd \"$(CURDIR)\" && make tunnel-video"'; \
 	else \
 		echo "Auto-spawning terminals is only supported on macOS currently."; \
 		echo "Please run 'make tunnel-control' and 'make tunnel-video' in separate terminals manually."; \
