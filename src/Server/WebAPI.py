@@ -8,6 +8,8 @@ import sys
 import os
 import uvicorn
 import struct
+import asyncio
+from datetime import datetime
 
 # Ensure we can import from sibling directories to get Command definitions
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -43,6 +45,20 @@ VIDEO_PORT = 8080
 INTERVAL_CHAR = '#'
 END_CHAR = '\n'
 
+log_buffer = []
+log_counter = 0
+
+def app_log(msg: str):
+    """Add a message to the internal log buffer."""
+    global log_counter
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    log_entry = {"id": log_counter, "msg": f"[{timestamp}] {msg}"}
+    log_counter += 1
+    print(log_entry["msg"])
+    log_buffer.append(log_entry)
+    if len(log_buffer) > 100:
+        log_buffer.pop(0)
+
 def send_command(command_str: str) -> bool:
     """Sends a raw command string to the local TCP server."""
     try:
@@ -50,9 +66,10 @@ def send_command(command_str: str) -> bool:
             s.settimeout(2)
             s.connect((TCP_IP, TCP_PORT))
             s.sendall(command_str.encode('utf-8'))
+        app_log(f"SENT: {command_str.strip()}")
         return True
     except Exception as e:
-        print(f"Connection Error: {e}")
+        app_log(f"ERROR: Failed to send '{command_str.strip()}' - {e}")
         return False
 
 # --- Pydantic Models for Request Validation ---
@@ -84,6 +101,24 @@ class MecanumRequest(BaseModel):
     rotate_speed: int = 0
 
 # --- API Routes ---
+
+@app.get('/api/logs_stream', tags=["System"])
+async def logs_stream():
+    """Streams internal API logs using Server-Sent Events (SSE)."""
+    async def event_generator():
+        last_id = -1
+        # Send current history first so UI populates immediately
+        if log_buffer:
+            for entry in log_buffer:
+                yield f"data: {entry['msg']}\n\n"
+                last_id = entry['id']
+        while True:
+            for entry in log_buffer:
+                if entry['id'] > last_id:
+                    yield f"data: {entry['msg']}\n\n"
+                    last_id = entry['id']
+            await asyncio.sleep(0.5)
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 def recvall(sock, count):
     """Helper function to reliably receive exactly `count` bytes from a socket."""
@@ -122,8 +157,17 @@ def video_stream_generator():
 
 @app.get('/api/status', tags=["System"])
 def status():
-    """Get API Status"""
-    return {"status": "online", "backend": f"{TCP_IP}:{TCP_PORT}"}
+    """Get API Status and verify hardware backend connection"""
+    hardware_online = False
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            s.connect((TCP_IP, TCP_PORT))
+            hardware_online = True
+    except Exception:
+        pass
+
+    return {"api": "online", "backend": f"{TCP_IP}:{TCP_PORT}", "hardware": "online" if hardware_online else "offline"}
 
 @app.post('/api/move', tags=["Movement"])
 def move_control(req: MoveRequest):
