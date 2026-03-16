@@ -33,7 +33,7 @@ app = FastAPI(title="PiCar Web API", description="API to control the PiCar")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, replace "*" with your React app's IP/Port
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

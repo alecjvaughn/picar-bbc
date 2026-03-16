@@ -10,49 +10,51 @@
     project_dir: "/home/{{ ansible_user }}/picar-bbc"
 
   tasks:
-    - name: Stop server application to free hardware resources
+    - name: Stop Python application to free hardware resources
       community.general.make:
         chdir: "{{ project_dir }}"
         target: stop-server-app
       ignore_errors: yes
 
-    - name: Cleanup previous Camera Test Output
-      file:
-        path: /tmp/test_camera.jpg
-        state: absent
-      when: component == "Camera" or component == "All-Non-Motor"
+    - block:
+        - name: Cleanup previous Camera Test Output
+          file:
+            path: /tmp/test_camera.jpg
+            state: absent
+          when: component == "Camera" or component == "All-Non-Motor"
 
-    - name: Execute hardware test
-      command: >
-        make docker-run-test COMPONENT={{ component }} DURATION={{ test_duration }}
-      args:
-        chdir: "{{ project_dir }}"
-      register: test_out
-      failed_when: test_out.rc != 0
+        - name: Execute hardware test
+          command: >
+            make docker-run-test COMPONENT={{ component }} DURATION={{ test_duration }}
+          args:
+            chdir: "{{ project_dir }}"
+          register: test_out
+          failed_when: test_out.rc != 0
 
-    - name: Verify Camera Test Output
-      stat:
-        path: /tmp/test_camera.jpg
-      register: camera_file
-      when: component == "Camera" or component == "All-Non-Motor"
+        - name: Verify Camera Test Output
+          stat:
+            path: /tmp/test_camera.jpg
+          register: camera_file
+          when: component == "Camera" or component == "All-Non-Motor"
 
-    - name: Fail if Camera file missing
-      fail:
-        msg: "Camera test failed: /tmp/test_camera.jpg was not created."
-      when: (component == "Camera" or component == "All-Non-Motor") and not camera_file.stat.exists
+        - name: Fail if Camera file missing
+          fail:
+            msg: "Camera test failed: /tmp/test_camera.jpg was not created."
+          when: (component == "Camera" or component == "All-Non-Motor") and not camera_file.stat.exists
 
-    - name: Fail if Camera file is empty
-      fail:
-        msg: "Camera test failed: /tmp/test_camera.jpg is empty."
-      when: (component == "Camera" or component == "All-Non-Motor") and camera_file.stat.exists and camera_file.stat.size == 0
+        - name: Fail if Camera file is empty
+          fail:
+            msg: "Camera test failed: /tmp/test_camera.jpg is empty."
+          when: (component == "Camera" or component == "All-Non-Motor") and camera_file.stat.exists and camera_file.stat.size == 0
 
-    - name: Display test output
-      debug:
-        msg: "{{ test_out.stdout_lines }}"
-
-    - name: Restart Server Application
-      community.general.make:
-        chdir: "{{ project_dir }}"
-        target: start-server-app
-      when: restart | default(true) | bool
-      ignore_errors: yes
+        - name: Display test output
+          debug:
+            msg: "{{ test_out.stdout_lines }}"
+            
+      always:
+        - name: Restart Python application
+          community.general.make:
+            chdir: "{{ project_dir }}"
+            target: start-server-app
+          when: restart | default(true) | bool
+          ignore_errors: yes

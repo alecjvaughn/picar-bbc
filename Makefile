@@ -90,7 +90,7 @@ help:
 	@echo "Testing & Hardware Control:"
 	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
 	@echo "  make test-all            : Run all hardware component tests locally"
-	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
+	@echo "  make test-exec           : Run hardware tests alongside running Python app (fast, potential conflicts)"
 	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
 	@echo "  make start-server-app    : Start the Python app inside container"
 	@echo "  make clear-leds          : Manually turn off LEDs (stops Python app)"
@@ -312,7 +312,7 @@ test-hardware:
 	@echo "⚠️  Stopping Python app in $(SERVER_NAME) to free up hardware resources..."
 	-$(MAKE) stop-server-app
 	@echo "🧪 Running hardware test for $(COMPONENT) inside $(SERVER_NAME)..."
-	docker exec -it -u root $(SERVER_NAME) \
+	-docker exec -it -u root $(SERVER_NAME) \
 		/bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
 	@if [ "$(RESTART)" = "true" ]; then \
 		echo "🔄 Restarting Python app in $(SERVER_NAME)..."; \
@@ -330,8 +330,8 @@ test-exec:
 		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
 		exit 1; \
 	fi
-	@echo "⚠️  Running test inside the ACTIVE $(SERVER_NAME) container..."
-	@echo "    Note: This may conflict with the running server (e.g. Camera busy, LEDs overwriting)."
+	@echo "⚠️  Running test inside $(SERVER_NAME) alongside the ACTIVE Python app..."
+	@echo "    Note: This may conflict with the running Python application (e.g. Camera busy, LEDs overwriting)."
 	docker exec -u root -it $(SERVER_NAME) /bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
 
 # ==============================================================================

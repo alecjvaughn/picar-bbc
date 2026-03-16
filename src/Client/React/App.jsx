@@ -8,6 +8,30 @@ function App() {
   const [ledMode, setLedMode] = useState(0);
   const [buzzerState, setBuzzerState] = useState(0);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const logEndRef = useRef(null);
+
+  // Stream logs from the backend using Server-Sent Events
+  useEffect(() => {
+    if (!debugOpen) return;
+    const eventSource = new EventSource(`http://${ip}/api/logs_stream`);
+    eventSource.onmessage = (e) => {
+      setLogs((prev) => {
+        const newLogs = [...prev, e.data];
+        // Keep only the last 100 entries to prevent memory bloat
+        return newLogs.length > 100 ? newLogs.slice(newLogs.length - 100) : newLogs;
+      });
+    };
+    return () => eventSource.close();
+  }, [debugOpen, ip]);
+
+  // Auto-scroll logs to the bottom
+  useEffect(() => {
+    if (debugOpen && logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, debugOpen]);
 
   // Generic API Caller for FastAPI
   const sendCommand = async (endpoint, payload) => {
@@ -82,6 +106,9 @@ function App() {
           onChange={(e) => setIp(e.target.value)} 
           placeholder="192.168.x.x:5001"
         />
+        <button onClick={() => setDebugOpen(!debugOpen)} style={{marginLeft: '10px', background: debugOpen ? '#00BB9E' : ''}}>
+          {debugOpen ? 'Hide Debug' : 'Show Debug'}
+        </button>
       </div>
 
       {/* LEFT COLUMN: Camera & Servos */}
@@ -164,6 +191,18 @@ function App() {
         </div>
       </div>
 
+      {/* Bottom Panel: Debug View */}
+      {debugOpen && (
+        <div className="panel debug-panel">
+          <h2>API Debug Logs</h2>
+          <div className="log-window">
+            {logs.map((log, i) => (
+              <div key={i} className="log-entry">{log}</div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
