@@ -180,7 +180,7 @@ tf-clean:
 # Docker Manual Workflow
 # ==============================================================================
 
-.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server x11-setup docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
+.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
 
 docker-build-root:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
@@ -191,7 +191,7 @@ docker-build-middleware: docker-build-root
 docker-build-server: docker-build-middleware
 	docker build $(BUILD_ARGS) -t $(SERVER_IMAGE) -f docker/images/server/Dockerfile .
 
-docker-build-client: docker-build-middleware
+docker-build-client:
 	docker build $(BUILD_ARGS) -t $(CLIENT_IMAGE) -f docker/images/client/Dockerfile .
 
 docker-build: docker-build-server
@@ -214,6 +214,7 @@ docker-run-server: docker-build create-network
 		--network $(NETWORK_NAME) \
 		--privileged \
 		-u root \
+		-v /dev/shm:/dev/shm \
 		$(PORTS) \
 		$(SERVER_IMAGE) \
 		/bin/bash -c "python3 main.py --no-gui & python3 WebAPI.py"
@@ -240,27 +241,11 @@ clear-leds:
 	$(MAKE) stop-server-app
 	docker exec -u root $(SERVER_NAME) python3 test.py Led-Off
 
-x11-setup:
-	@echo "Configuring X11..."
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		echo "Configuring X11 for macOS..."; \
-		echo "Ensure XQuartz is running and 'Allow connections from network clients' is checked in Preferences > Security."; \
-		open -a XQuartz || echo "Warning: XQuartz not found. Install with 'brew install --cask xquartz'"; \
-		sleep 1; \
-		if command -v xhost >/dev/null 2>&1; then \
-			DISPLAY=$${DISPLAY:-:0} xhost +localhost; \
-		elif [ -x /opt/X11/bin/xhost ]; then \
-			DISPLAY=$${DISPLAY:-:0} /opt/X11/bin/xhost +localhost; \
-		else \
-			echo "Warning: xhost not found. GUI might not appear. Install XQuartz: brew install --cask xquartz"; \
-		fi; \
-	fi
-
-docker-run-client: docker-build-client x11-setup
-	@echo "Starting client..."
-	docker run --rm -it --name $(CLIENT_NAME) \
-		-e DISPLAY=host.docker.internal:0 \
-		-v /tmp/.X11-unix:/tmp/.X11-unix \
+docker-run-client: docker-build-client
+	@echo "Starting web client on http://localhost:3000..."
+	-docker rm -f $(CLIENT_NAME) 2>/dev/null || true
+	docker run --rm -d --name $(CLIENT_NAME) \
+		-p 3000:80 \
 		$(CLIENT_IMAGE)
 
 docker-run-tunnel: docker-build create-network
