@@ -43,7 +43,6 @@ resource "docker_image" "picar_client" {
     context    = ".."
     dockerfile = "docker/images/client/Dockerfile"
   }
-  depends_on = [docker_image.python_middleware]
 }
 
 # Define the network resource referenced by the container

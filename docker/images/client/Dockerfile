@@ -1,19 +1,31 @@
-# PSEUDOCODE: Application Image
-# 1. Inherit from the Python Middleware
-FROM local/python_middleware:latest AS app_client
+# 1. Build Stage
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# 2. Dependency Caching Layer
-# Copy only requirements first. Docker caches this layer if the file hasn't changed.
-COPY --chown=secureuser:pipeline src/requirements.txt .
+# Copy package configuration
+COPY package.json ./
 
-# 3. Install Libraries
-RUN grep -v -e "opencv-python-headless" requirements.txt > requirements.tmp && pip install --no-cache-dir -r requirements.tmp && rm requirements.tmp
+# Install Node dependencies
+RUN npm install
 
-# 4. Application Logic
-COPY --chown=secureuser:pipeline src/ .
+# Copy the React source code
+COPY src/Client/React ./src/Client/React
 
-# 5. Runtime Configuration
-WORKDIR /app/Client
-CMD ["python3", "Qt/Main.py"]
+# Build the static Vite application
+RUN npm run build
+
+# 2. Production Serve Stage
+FROM nginx:alpine AS serve
+
+# Remove default Nginx static assets
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy the built assets from the build stage
+# (Vite outputs to the dist folder inside the target directory)
+COPY --from=build /app/src/Client/React/dist /usr/share/nginx/html
+
+# Expose standard HTTP port
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
