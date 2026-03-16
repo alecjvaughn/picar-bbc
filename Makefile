@@ -88,12 +88,12 @@ help:
 	@echo "  make logs                : View server logs"
 	@echo ""
 	@echo "Testing & Hardware Control:"
-	@echo "  make test-hardware       : Run hardware component tests (stops server, restarts by default)"
+	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
 	@echo "  make test-all            : Run all hardware component tests locally"
 	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
 	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
 	@echo "  make start-server-app    : Start the Python app inside container"
-	@echo "  make clear-leds          : Manually turn off LEDs (stops server)"
+	@echo "  make clear-leds          : Manually turn off LEDs (stops Python app)"
 	@echo ""
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
@@ -214,9 +214,6 @@ docker-run-server: docker-build create-network
 		--network $(NETWORK_NAME) \
 		--privileged \
 		-u root \
-		-v /dev:/dev \
-		-v /run/udev:/run/udev:ro \
-		-v /tmp:/tmp \
 		$(PORTS) \
 		$(SERVER_IMAGE) \
 		/bin/bash -c "python3 main.py --no-gui & python3 WebAPI.py"
@@ -304,38 +301,38 @@ logs:
 # Non-interactive test runner for automation/Ansible
 docker-run-test:
 	docker exec -u root $(SERVER_NAME) \
-		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),60s) python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
+		/bin/bash -c "timeout --signal=2 $${DURATION:-60s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
 
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor> [RESTART=true|false]"; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Stopping Python app in $(SERVER_NAME) to free up hardware resources..."
 	-$(MAKE) stop-server-app
 	@echo "🧪 Running hardware test for $(COMPONENT) inside $(SERVER_NAME)..."
 	docker exec -it -u root $(SERVER_NAME) \
-		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),15s) python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
-	@if [ "$(RESTART)" != "false" ]; then \
+		/bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
+	@if [ "$(RESTART)" = "true" ]; then \
 		echo "🔄 Restarting Python app in $(SERVER_NAME)..."; \
 		$(MAKE) start-server-app; \
 	fi
 
 test-all:
 	@echo "🧪 Running ALL hardware tests locally..."
-	$(MAKE) test-hardware COMPONENT=All-Non-Motor RESTART=false DURATION=30s
-	$(MAKE) test-hardware COMPONENT=All-Motor DURATION=30s
+	$(MAKE) test-hardware COMPONENT=Non-Motor-All RESTART=false DURATION=30s
+	$(MAKE) test-hardware COMPONENT=Motor-All RESTART=true DURATION=30s
 
 test-exec:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor>"; \
+		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Running test inside the ACTIVE $(SERVER_NAME) container..."
 	@echo "    Note: This may conflict with the running server (e.g. Camera busy, LEDs overwriting)."
-	docker exec -u root -it $(SERVER_NAME) /bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),15s) python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
+	docker exec -u root -it $(SERVER_NAME) /bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
 
 # ==============================================================================
 # Ansible Workflow
@@ -367,7 +364,7 @@ ansible-deploy:
 ansible-test:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor> [DURATION=60s]"; \
+		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All> [DURATION=60s]"; \
 		exit 1; \
 	fi
 	@echo "🧪 Running hardware test via Ansible for $(COMPONENT)..."
@@ -379,8 +376,8 @@ ansible-test:
 
 ansible-test-all:
 	@echo "🧪 Running ALL hardware tests via Ansible..."
-	$(MAKE) ansible-test COMPONENT=All-Non-Motor RESTART=false
-	$(MAKE) ansible-test COMPONENT=All-Motor
+	$(MAKE) ansible-test COMPONENT=Non-Motor-All RESTART=false
+	$(MAKE) ansible-test COMPONENT=Motor-All RESTART=true
 
 ansible-reboot:
 	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
@@ -414,7 +411,7 @@ install:
 		rm requirements.tmp; \
 	else \
 		echo "Non-RPi OS detected. Installing requirements (excluding hardware libs)..."; \
-		grep -v -e "rpi-ws281x" -e "rpi-lgpio" src/requirements.txt > requirements.tmp; \
+		grep -v -e "rpi-ws281x" src/requirements.txt > requirements.tmp; \
 		. venv/bin/activate && pip install -r requirements.tmp; \
 		rm requirements.tmp; \
 	fi
