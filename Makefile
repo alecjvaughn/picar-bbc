@@ -317,12 +317,12 @@ docker-run-test:
 		-v /run/udev:/run/udev:ro \
 		-v /tmp:/tmp \
 		$(SERVER_IMAGE) \
-		python test.py $(COMPONENT)
+		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),60s) python test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
 
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
@@ -338,7 +338,7 @@ test-hardware:
 		-v /run/udev:/run/udev:ro \
 		-v /tmp:/tmp \
 		$(SERVER_IMAGE) \
-		python test.py $(COMPONENT)
+		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),15s) python test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
 	@if [ "$(RESTART)" = "true" ]; then \
 		echo "🔄 Restarting $(SERVER_NAME)..."; \
 		$(MAKE) docker-run-server; \
@@ -346,18 +346,18 @@ test-hardware:
 
 test-all:
 	@echo "🧪 Running ALL hardware tests locally..."
-	$(MAKE) test-hardware COMPONENT=Non-Motor-All RESTART=false
-	$(MAKE) test-hardware COMPONENT=Motor-All RESTART=true
+	$(MAKE) test-hardware COMPONENT=All-Non-Motor RESTART=false DURATION=30s
+	$(MAKE) test-hardware COMPONENT=All-Motor RESTART=true DURATION=30s
 
 test-exec:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Running test inside the ACTIVE $(SERVER_NAME) container..."
 	@echo "    Note: This may conflict with the running server (e.g. Camera busy, LEDs overwriting)."
-	docker exec -u root -it $(SERVER_NAME) python3 test.py $(COMPONENT)
+	docker exec -u root -it $(SERVER_NAME) /bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),15s) python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
 
 # ==============================================================================
 # Ansible Workflow
@@ -389,7 +389,7 @@ ansible-deploy:
 ansible-test:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All> [DURATION=60s]"; \
+		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor> [DURATION=60s]"; \
 		exit 1; \
 	fi
 	@echo "🧪 Running hardware test via Ansible for $(COMPONENT)..."
@@ -401,8 +401,8 @@ ansible-test:
 
 ansible-test-all:
 	@echo "🧪 Running ALL hardware tests via Ansible..."
-	$(MAKE) ansible-test COMPONENT=Non-Motor-All RESTART=false
-	$(MAKE) ansible-test COMPONENT=Motor-All RESTART=true
+	$(MAKE) ansible-test COMPONENT=All-Non-Motor RESTART=false
+	$(MAKE) ansible-test COMPONENT=All-Motor RESTART=true
 
 ansible-reboot:
 	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
