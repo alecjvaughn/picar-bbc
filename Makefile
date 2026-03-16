@@ -73,6 +73,7 @@ help:
 	@echo "Local Development:"
 	@echo "  make run-dev             : Run full local dev stack (Server + API + React Client)"
 	@echo "  make test-dev            : Spawn both backend and frontend test runners in new terminals"
+	@echo "  make dev-all             : Run local dev stack AND tests simultaneously"
 	@echo "  make clean-install       : Wipe and reinstall all Node and Python dependencies"
 	@echo "  make clean-terminals     : Manually clean up spawned development terminals/processes"
 	@echo ""
@@ -119,6 +120,7 @@ help-all:
 	@echo "  make test-unit           : Run backend API unit tests locally (pytest)"
 	@echo "  make test-ui             : Run frontend React unit tests locally (vitest)"
 	@echo "  make test-dev            : Spawn both backend and frontend test runners in new terminals"
+	@echo "  make dev-all             : Run local dev stack AND tests simultaneously"
 	@echo "  make clear-leds          : Manually turn off LEDs (stops Python app)"
 	@echo ""
 	@echo "Ansible Workflow:"
@@ -350,7 +352,7 @@ test-ui:
 	npm run test
 
 test-dev:
-	@$(MAKE) clean-terminals
+	@$(MAKE) clean-test
 	@echo "🚀 Spawning test runners in separate terminals..."
 	@if [ "$$(uname)" = "Darwin" ]; then \
 		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar Backend Tests\\007\"; cd \"$(CURDIR)\" && make test-unit"'; \
@@ -418,7 +420,7 @@ ansible-nuke:
 # Local Development
 # ==============================================================================
 
-.PHONY: clean-install install rebuild-hardware venv venv-cleanup run-server run-client clean-terminals
+.PHONY: clean-install install rebuild-hardware venv venv-cleanup run-server run-client clean-terminals clean-dev clean-test clean-tunnels dev-all
 
 clean-install:
 	rm -rf node_modules package-lock.json
@@ -509,7 +511,7 @@ tunnel-video:
 	cloudflared access tcp --hostname $(TUNNEL_VIDEO_HOSTNAME) --url localhost:8080
 
 tunnels:
-	@$(MAKE) clean-terminals
+	@$(MAKE) clean-tunnels
 	@echo "Spawning tunnels in separate terminals..."
 	@if [ "$$(uname)" = "Darwin" ]; then \
 		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar Control Tunnel\\007\"; cd \"$(CURDIR)\" && make tunnel-control"'; \
@@ -518,3 +520,7 @@ tunnels:
 		echo "Auto-spawning terminals is only supported on macOS currently."; \
 		echo "Please run 'make tunnel-control' and 'make tunnel-video' in separate terminals manually."; \
 	fi
+
+dev-all:
+	@$(MAKE) run-dev
+	@$(MAKE) test-dev
