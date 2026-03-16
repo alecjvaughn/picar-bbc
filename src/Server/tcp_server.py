@@ -43,8 +43,26 @@ class TCPServer:
     def accept_connections(self):
         # Accept new connections until the server is stopped
         while not self.stop_event.is_set():
-            # Use select to monitor the server socket and the stop pipe
-            readable, writable, exceptional = select.select([self.server_socket, self.stop_pipe_r] + list(self.client_sockets.keys()), [], [])
+            try:
+                # Use select to monitor the server socket and the stop pipe
+                monitored_sockets = [self.server_socket, self.stop_pipe_r] + list(self.client_sockets.keys())
+                readable, writable, exceptional = select.select(monitored_sockets, [], [], 1.0)
+            except OSError as e:
+                # [Errno 9] Bad file descriptor means a socket was closed by another thread.
+                if getattr(e, 'errno', None) == 9:
+                    # Clean out any sockets from our tracking list that are already dead
+                    dead_sockets = []
+                    for sock in list(self.client_sockets.keys()):
+                        try:
+                            if sock.fileno() == -1:
+                                dead_sockets.append(sock)
+                        except Exception:
+                            dead_sockets.append(sock)
+                    for dead_sock in dead_sockets:
+                        self.client_sockets.pop(dead_sock, None)
+                    continue
+                else:
+                    raise e
             for s in readable:
                 if s == self.server_socket and self.active_connections < self.max_clients:
                     # Accept a new connection if the maximum number of clients is not reached
@@ -103,8 +121,13 @@ class TCPServer:
                     encoded_message = message
                 client_socket.sendall(encoded_message)
             except socket.error as e:
-                print(f"Error sending data to {self.client_sockets[client_socket]}: {e}")
-                self.remove_client(client_socket)
+                # Ignore EWOULDBLOCK / EAGAIN (buffer full)
+                if getattr(e, 'errno', None) in (11, 35):
+                    pass
+                else:
+                    if client_socket in self.client_sockets:
+                        print(f"Error sending data to {self.client_sockets[client_socket]}: {e}")
+                    self.remove_client(client_socket)
 
     def send_to_client(self, client_address, message):
         # Send a message to a specific client
@@ -117,8 +140,12 @@ class TCPServer:
                         encoded_message = message
                     client_socket.sendall(encoded_message)
                 except socket.error as e:
-                    print(f"Error sending data to {client_address}: {e}")
-                    self.remove_client(client_socket)
+                    # Ignore EWOULDBLOCK / EAGAIN (buffer full)
+                    if getattr(e, 'errno', None) in (11, 35):
+                        pass
+                    else:
+                        print(f"Error sending data to {client_address}: {e}")
+                        self.remove_client(client_socket)
                 return
         print(f"Client at {client_address} not found.")
 

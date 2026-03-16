@@ -8,6 +8,7 @@ function App() {
   const [ledMode, setLedMode] = useState(0);
   const [buzzerState, setBuzzerState] = useState(0);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [streamKey, setStreamKey] = useState(Date.now());
   const [debugOpen, setDebugOpen] = useState(false);
   const [logs, setLogs] = useState([]);
   const logEndRef = useRef(null);
@@ -116,13 +117,16 @@ function App() {
         <h2>Camera Feed</h2>
         <div className="video-feed">
           {videoOpen ? (
-            <img src={`http://${ip}/api/video_feed`} alt="Stream" style={{width: '100%', height: '100%', objectFit: 'cover'}}/>
+            <img src={`http://${ip}/api/video_feed?t=${streamKey}`} alt="Stream" style={{width: '100%', height: '100%', objectFit: 'cover'}}/>
           ) : (
             <span style={{color: '#666'}}>Video Closed</span>
           )}
         </div>
         <br/>
-        <button onClick={() => setVideoOpen(!videoOpen)}>
+        <button onClick={() => {
+          if (!videoOpen) setStreamKey(Date.now());
+          setVideoOpen(!videoOpen);
+        }}>
           {videoOpen ? 'Close Video' : 'Open Video'}
         </button>
 
