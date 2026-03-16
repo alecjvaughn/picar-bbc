@@ -7,5 +7,6 @@ numpy
 Pillow
 opencv-python-headless
 gpiozero
+rpi-lgpio
 rpi-ws281x
 PyQt5

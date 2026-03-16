@@ -214,6 +214,13 @@ docker-run-server: docker-build create-network
 		--network $(NETWORK_NAME) \
 		--privileged \
 		-u root \
+		--device /dev/i2c-1 \
+		--device /dev/video0 \
+		--device /dev/spidev0.0 \
+		--device /dev/spidev0.1 \
+		--device /dev/gpiomem \
+		-v /run/udev:/run/udev:ro \
+		-v /tmp:/tmp \
 		$(PORTS) \
 		$(SERVER_IMAGE) \
 		/bin/bash -c "python3 main.py --no-gui & python3 WebAPI.py"
@@ -306,6 +313,7 @@ docker-run-test:
 		--device /dev/video0 \
 		--device /dev/spidev0.0 \
 		--device /dev/spidev0.1 \
+		--device /dev/gpiomem \
 		-v /run/udev:/run/udev:ro \
 		-v /tmp:/tmp \
 		$(SERVER_IMAGE) \
@@ -326,6 +334,7 @@ test-hardware:
 		--device /dev/video0 \
 		--device /dev/spidev0.0 \
 		--device /dev/spidev0.1 \
+		--device /dev/gpiomem \
 		-v /run/udev:/run/udev:ro \
 		-v /tmp:/tmp \
 		$(SERVER_IMAGE) \
@@ -427,7 +436,7 @@ install:
 		rm requirements.tmp; \
 	else \
 		echo "Non-RPi OS detected. Installing requirements (excluding hardware libs)..."; \
-		grep -v -e "rpi-ws281x" src/requirements.txt > requirements.tmp; \
+		grep -v -e "rpi-ws281x" -e "rpi-lgpio" src/requirements.txt > requirements.tmp; \
 		. venv/bin/activate && pip install -r requirements.tmp; \
 		rm requirements.tmp; \
 	fi
