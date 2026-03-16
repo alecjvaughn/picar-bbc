@@ -1,3 +1,6 @@
+import os
+os.environ["OPENCV_VIDEOIO_DEBUG"] = "1"
+os.environ["OPENCV_LOG_LEVEL"] = "DEBUG"
 import cv2
 import time
 import numpy as np
@@ -19,20 +22,27 @@ class Camera:
         if self.cap is not None and self.cap.isOpened():
             return
         
-        # Restrict to indices 0 and 11 to avoid Pi hardware decoder nodes.
-        # Hardware decoders (like index 14 or -1) report as "open" but 
-        # will hang indefinitely when we call read().
-        for index in [0, 11]:
-            self.cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
-            if self.cap.isOpened():
-                break
-                
-        if not self.cap.isOpened():
-            print("Error: Could not open video device on index 0 or 11. Is the camera connected?")
-            return
+        # Detect if we are on the physical Raspberry Pi hardware
+        is_rpi = False
+        try:
+            with open('/sys/firmware/devicetree/base/model', 'r') as f:
+                if 'Raspberry Pi' in f.read():
+                    is_rpi = True
+        except FileNotFoundError:
+            pass
 
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, size[0])
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, size[1])
+        if is_rpi:
+            # Use the modern libcamera stack via GStreamer
+            pipeline = f"libcamerasrc ! video/x-raw, width={size[0]}, height={size[1]}, framerate=15/1 ! videoconvert ! appsink drop=true max-buffers=1"
+            self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        else:
+            # Local mock: Use the computer's built-in webcam
+            self.cap = cv2.VideoCapture(0)
+
+        if not self.cap.isOpened():
+            device_name = "libcamerasrc" if is_rpi else "local webcam (index 0)"
+            print(f"Error: Could not open video device using {device_name}. Is the camera connected?")
+            return
 
     def start_image(self, show_preview: bool = False) -> None:
         """Start the camera (OpenCV VideoCapture)."""
@@ -57,7 +67,9 @@ class Camera:
             cv2.imwrite(filename, frame)
             return {"filename": filename}
         else:
-            print("Error: Could not read frame.")
+            backend = self.cap.getBackendName() if self.cap else "Unknown"
+            print(f"Error: Could not read frame. Video Backend: {backend}")
+            print(f"Camera State -> Opened: {self.cap.isOpened() if self.cap else False}, Resolution: {self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x{self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
             return None
 
     def start_stream(self, filename: str = None) -> None:

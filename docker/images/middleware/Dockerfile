@@ -32,8 +32,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     qt5-qmake \
     qtbase5-dev \
     # Python Science/Image
+    python3-opencv \
     python3-numpy \
     python3-pil \
+    # GStreamer & Libcamera
+    libcamera-tools \
+    gstreamer1.0-libcamera \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
     && curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb \
     && dpkg -i cloudflared.deb \
     && rm cloudflared.deb \
