@@ -31,6 +31,15 @@
       become: false
       when: force_clean | default(false) | bool
 
+    - name: Reboot Pi to clear hardware locks (Clean or Cache Bust)
+      reboot:
+        msg: "Rebooting to clear hardware locks before fresh deployment"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+      when: (force_clean | default(false) | bool) or ('CACHE_BUST' in build_args | default(''))
+
     - name: Force Remove Existing Containers (Ensure Clean Restart)
       command: docker rm -f picar-server picar-tunnel
       ignore_errors: yes

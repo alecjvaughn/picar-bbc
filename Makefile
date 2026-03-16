@@ -389,7 +389,7 @@ ansible-deploy:
 		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
 		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
 		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
-		$(if $(BUILD_ARGS),-e 'build_args=$(BUILD_ARGS)') \
+		$(if $(BUILD_ARGS),-e "build_args='$(BUILD_ARGS)'") \
 		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
 		$(ANSIBLE_ARGS)
 	@echo "🚀 Phase 2: Deploying Application..."
@@ -398,7 +398,7 @@ ansible-deploy:
 		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
 		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
 		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
-		$(if $(BUILD_ARGS),-e 'build_args=$(BUILD_ARGS)') \
+		$(if $(BUILD_ARGS),-e "build_args='$(BUILD_ARGS)'") \
 		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
 		$(ANSIBLE_ARGS)
 
