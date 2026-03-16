@@ -3,6 +3,9 @@
 FROM debian:bookworm-slim AS root_base
 
 # 2. System Hardening & Updates
+# Bump this number to force Docker to pull the latest OS packages
+ARG CACHE_BUST=1
+
 # Update package lists and upgrade existing packages to fix CVEs
 RUN apt-get update && apt-get upgrade -y && \
     # Install essential security certificates (needed for HTTPS/API calls)

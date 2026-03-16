@@ -79,6 +79,7 @@ help:
 	@echo ""
 	@echo "Deployment & Hardware:"
 	@echo "  make ansible-deploy      : Configure the Raspberry Pi and deploy the application"
+	@echo '                             (Optional: CLEAN=true or BUILD_ARGS="--build-arg CACHE_BUST=$$(date +%s)")'
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
 										COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s]
 	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
@@ -126,6 +127,8 @@ help-all:
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
+	@echo '                             (Optional: CLEAN=true to nuke images/cache before deploy)'
+	@echo '                             (Optional: BUILD_ARGS="--build-arg CACHE_BUST=$$(date +%s)" to force apt update)'
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
 	@echo "  make ansible-reboot      : Reboot the Pi and poll for system health"
 	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"

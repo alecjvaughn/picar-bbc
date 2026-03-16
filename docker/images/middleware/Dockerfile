@@ -2,6 +2,9 @@
 # 1. Inherit from the secure Root Image (Local build context)
 FROM local/root_base:latest AS python_middleware
 
+# Bump this number to force Docker to pull the latest apt packages
+ARG CACHE_BUST=1
+
 # 2. Install Runtime Dependencies
 # Install Python 3, pip, and venv (standard for Debian 12+)
 RUN apt-get update && apt-get install -y --no-install-recommends \
