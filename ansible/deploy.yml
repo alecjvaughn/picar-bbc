@@ -33,6 +33,8 @@
       community.general.make:
         chdir: "{{ project_dir }}"
         target: docker-run-server
+        params:
+          BUILD_ARGS: "{{ build_args | default('') }}"
       become: false
 
     - name: Build and Run Tunnel (Docker)

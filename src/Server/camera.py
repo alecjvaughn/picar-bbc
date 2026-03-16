@@ -53,9 +53,13 @@ class Camera:
         """Capture and save an image to the specified file."""
         if self.cap is None or not self.cap.isOpened():
             self._open_camera(self.preview_size)
+            # If we just cold-started the camera, give the Auto-Exposure time to settle
+            time.sleep(2.0)
         
-        # Read a few frames to allow auto-exposure to settle
-        for _ in range(5):
+        # Flush the buffer. Because we use 'drop=true max-buffers=1', GStreamer 
+        # might be holding onto a dark frame from a few seconds ago. Reading 
+        # several frames guarantees we get the freshest, fully-exposed image.
+        for _ in range(15):
             self.cap.read()
             
         ret, frame = self.cap.read()
