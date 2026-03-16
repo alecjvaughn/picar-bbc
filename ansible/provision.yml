@@ -38,6 +38,7 @@
 
     - name: Configure Raspberry Pi Interfaces
       include_tasks: configure_pi.yml
+      ignore_errors: yes
 
   handlers:
     - name: Reboot Pi

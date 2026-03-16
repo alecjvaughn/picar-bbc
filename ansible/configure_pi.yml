@@ -15,15 +15,15 @@
     create: yes
   notify: Reboot Pi
 
-- name: Configure Camera settings (Libcamera / Auto Detect)
+- name: Configure Camera settings (Legacy V4L2 Stack for OpenCV)
   ansible.builtin.lineinfile:
     path: /boot/firmware/config.txt
     regexp: "^{{ item.regexp }}"
     line: "{{ item.line }}"
     create: yes
   loop:
-    - { regexp: 'camera_auto_detect=', line: 'camera_auto_detect=1' }
-    - { regexp: 'start_x=', line: 'start_x=0' }
+    - { regexp: 'camera_auto_detect=', line: 'camera_auto_detect=0' }
+    - { regexp: 'start_x=', line: 'start_x=1' }
     - { regexp: 'gpu_mem=', line: 'gpu_mem=128' }
   notify: Reboot Pi
 
@@ -41,11 +41,11 @@
   when: "'Raspberry Pi 5' not in pi_model_output.stdout and 'Raspberry Pi 4' not in pi_model_output.stdout and 'Raspberry Pi 400' not in pi_model_output.stdout"
   notify: Reboot Pi
 
-- name: Remove manual camera overlays (Conflict with auto-detect)
+- name: Set specific camera overlay (OV5647)
   lineinfile:
     path: /boot/firmware/config.txt
     regexp: '^dtoverlay=ov5647'
-    state: absent
+    line: 'dtoverlay=ov5647'
   notify: Reboot Pi
 
 - name: Verify I2C devices (PCA9685 and ADC) are present
