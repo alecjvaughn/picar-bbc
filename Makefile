@@ -385,6 +385,9 @@ ansible-nuke:
 clean-install:
 	rm -rf node_modules package-lock.json
 	npm install
+	$(MAKE) venv-cleanup
+	$(MAKE) venv
+	. venv/bin/activate
 
 install:
 	@echo "Installing requirements into venv..."
@@ -396,7 +399,7 @@ install:
 		rm requirements.tmp; \
 	else \
 		echo "Non-RPi OS detected. Installing requirements (excluding hardware libs)..."; \
-		grep -v -e "rpi-ws281x" src/requirements.txt > requirements.tmp; \
+		grep -v -e "rpi-ws281x" -e "rpi-lgpio" src/requirements.txt > requirements.tmp; \
 		. venv/bin/activate && pip install -r requirements.tmp; \
 		rm requirements.tmp; \
 	fi

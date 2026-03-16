@@ -1,16 +1,30 @@
+# Project Specific
 _temp_
-node_modules/
-infrastructure/.terraform/
-infrastructure/.terraform.lock.hcl
-infrastructure/secrets
-.env*
-*.tfstate
-*.tfstate.*
-__pycache__/
-*.pyc
-venv/
-.DS_Store
 IP.txt
 params.json
 video.jpg
 *.bak
+
+# Node & React Client
+node_modules/
+dist/
+*.log
+
+# Python Server
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.pytest_cache/
+
+# Infrastructure & Ansible
+infrastructure/.terraform/
+infrastructure/.terraform.lock.hcl
+infrastructure/secrets
+*.tfstate
+*.tfstate.*
+*.retry
+
+# Environment & OS
+.env*
+.DS_Store
