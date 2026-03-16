@@ -3,6 +3,8 @@ uvicorn
 gunicorn==21.2.0
 requests==2.31.0
 google-cloud-firestore==2.11.1
+pytest
+httpx
 numpy
 Pillow
 opencv-python-headless
