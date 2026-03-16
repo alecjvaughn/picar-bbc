@@ -63,10 +63,33 @@ endif
 # Help
 # ==============================================================================
 
-.PHONY: help
+.PHONY: help help-all
 help:
 	@echo "--------------------------------------------------------------------------------"
-	@echo "Picar-BBC Makefile"
+	@echo "Picar-BBC Makefile - Core Workflow"
+	@echo "Run 'make help-all' to see the comprehensive list of all commands."
+	@echo "--------------------------------------------------------------------------------"
+	@echo "Local Development:"
+	@echo "  make run-dev             : Run full local dev stack (Server + API + React Client)"
+	@echo "  make test-dev            : Spawn both backend and frontend test runners in new terminals"
+	@echo "  make clean-install       : Wipe and reinstall all Node and Python dependencies"
+	@echo "  make clean-terminals     : Manually clean up spawned development terminals/processes"
+	@echo ""
+	@echo "Deployment & Hardware:"
+	@echo "  make ansible-deploy      : Configure the Raspberry Pi and deploy the application"
+	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
+										COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s]
+	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
+										COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s]
+	@echo "  make logs                : View live server logs from the Pi container"
+	@echo ""
+	@echo "Remote Access:"
+	@echo "  make tunnels             : Open local access to Pi ports via Cloudflare (macOS)"
+	@echo "--------------------------------------------------------------------------------"
+
+help-all:
+	@echo "--------------------------------------------------------------------------------"
+	@echo "Picar-BBC Makefile - Comprehensive Commands"
 	@echo "--------------------------------------------------------------------------------"
 	@echo "Terraform Workflow (Preferred):"
 	@echo "  make up                  : Provision infrastructure (Builds images, starts containers)"
@@ -89,17 +112,18 @@ help:
 	@echo ""
 	@echo "Testing & Hardware Control:"
 	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
-	@echo "  make test-all            : Run all hardware component tests locally"
 	@echo "  make test-exec           : Run hardware tests alongside running Python app (fast, potential conflicts)"
 	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
 	@echo "  make start-server-app    : Start the Python app inside container"
+	@echo "  make test-unit           : Run backend API unit tests locally (pytest)"
+	@echo "  make test-ui             : Run frontend React unit tests locally (vitest)"
+	@echo "  make test-dev            : Spawn both backend and frontend test runners in new terminals"
 	@echo "  make clear-leds          : Manually turn off LEDs (stops Python app)"
 	@echo ""
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
-	@echo "  make ansible-test-all    : Run all hardware tests sequentially via Ansible"
 	@echo "  make ansible-reboot      : Reboot the Pi and poll for system health"
 	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"
 	@echo "                             (Optional: ANSIBLE_ARGS='-vvv' for debug output)"
@@ -267,6 +291,8 @@ docker-down:
 
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
+	@echo "🧹 Clearing Docker BuildKit cache..."
+	docker builder prune -a -f
 
 docker-prune: docker-down
 	@echo "Pruning all stopped containers, dangling images, and unused networks..."
@@ -291,7 +317,7 @@ docker-run-test:
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Stopping Python app in $(SERVER_NAME) to free up hardware resources..."
@@ -304,20 +330,34 @@ test-hardware:
 		$(MAKE) start-server-app; \
 	fi
 
-test-all:
-	@echo "🧪 Running ALL hardware tests locally..."
-	$(MAKE) test-hardware COMPONENT=Non-Motor-All RESTART=false DURATION=30s
-	$(MAKE) test-hardware COMPONENT=Motor-All RESTART=true DURATION=30s
-
 test-exec:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All>"; \
+		echo "Usage: make test-exec COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All>"; \
 		exit 1; \
 	fi
 	@echo "⚠️  Running test inside $(SERVER_NAME) alongside the ACTIVE Python app..."
 	@echo "    Note: This may conflict with the running Python application (e.g. Camera busy, LEDs overwriting)."
 	docker exec -u root -it $(SERVER_NAME) /bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
+
+test-unit:
+	@echo "🧪 Running backend unit tests..."
+	. venv/bin/activate && pytest src/Server/
+
+test-ui:
+	@echo "🧪 Running frontend React tests..."
+	npm run test
+
+test-dev:
+	@$(MAKE) clean-terminals
+	@echo "🚀 Spawning test runners in separate terminals..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar Backend Tests\\007\"; cd \"$(CURDIR)\" && make test-unit"'; \
+		osascript -e 'tell application "Terminal" to do script "printf \"\\033]0;PiCar Frontend Tests\\007\"; cd \"$(CURDIR)\" && make test-ui"'; \
+	else \
+		echo "Auto-spawning terminals is only supported on macOS currently."; \
+		echo "Please run 'make test-unit' and 'make test-ui' manually."; \
+	fi
 
 # ==============================================================================
 # Ansible Workflow
@@ -350,7 +390,7 @@ ansible-deploy:
 ansible-test:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|Motor-All|Non-Motor-All> [DURATION=60s]"; \
+		echo "Usage: make ansible-test COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s]"; \
 		exit 1; \
 	fi
 	@echo "🧪 Running hardware test via Ansible for $(COMPONENT)..."
@@ -359,11 +399,6 @@ ansible-test:
 	if [ -n "$(RESTART)" ]; then EXTRA_VARS="$$EXTRA_VARS -e restart=$(RESTART)"; fi; \
 	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
 	ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
-
-ansible-test-all:
-	@echo "🧪 Running ALL hardware tests via Ansible..."
-	$(MAKE) ansible-test COMPONENT=All-Non-Motor RESTART=false
-	$(MAKE) ansible-test COMPONENT=All-Motor RESTART=true
 
 ansible-reboot:
 	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
@@ -436,12 +471,16 @@ clean-terminals:
 	@-pkill -f "python3 src/Server/WebAPI.py" 2>/dev/null || true
 	@-pkill -f "vite src" 2>/dev/null || true
 	@-pkill -f "cloudflared access tcp" 2>/dev/null || true
+	@-pkill -f "pytest" 2>/dev/null || true
+	@-pkill -f "vitest" 2>/dev/null || true
 	@if [ "$$(uname)" = "Darwin" ]; then \
 		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Server")' 2>/dev/null || true; \
 		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar API")' 2>/dev/null || true; \
 		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar React")' 2>/dev/null || true; \
 		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Control Tunnel")' 2>/dev/null || true; \
 		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Video Tunnel")' 2>/dev/null || true; \
+		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Backend Tests")' 2>/dev/null || true; \
+		osascript -e 'tell application "Terminal" to close (every window whose name contains "PiCar Frontend Tests")' 2>/dev/null || true; \
 	fi
 
 run-dev:

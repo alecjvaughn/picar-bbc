@@ -201,14 +201,14 @@ def test_Camera():
         print (f"Camera Error: {e}")
         print ("\nEnd of program")
 
-def test_Motor_All():
+def test_All_Motor():
     print("\n=== Testing All Motor Components ===")
     print(">> Testing DC Motors...")
     test_Motor()
     print(">> Testing Servos (5s)...")
     test_Servo(duration=5)
 
-def test_Non_Motor_All():
+def test_All_Non_Motor():
     print("\n=== Testing All Non-Motor Components ===")
     test_Led()
     test_Buzzer()
@@ -221,6 +221,11 @@ def test_Non_Motor_All():
     test_Adc(duration=5)
     print(">> Testing Battery (5s)...")
     test_Battery(duration=5)
+
+def test_All():
+    print("\n=== Testing All Components ===")
+    test_All_Non_Motor()
+    test_All_Motor()
 
 # Main program logic follows:
 if __name__ == '__main__':
@@ -253,7 +258,9 @@ if __name__ == '__main__':
         test_Buzzer()  
     elif sys.argv[1] == 'Camera':
         test_Camera()
-    elif sys.argv[1] == 'Motor-All':
-        test_Motor_All()
-    elif sys.argv[1] == 'Non-Motor-All':
-        test_Non_Motor_All()
+    elif sys.argv[1] == 'All-Motor':
+        test_All_Motor()
+    elif sys.argv[1] == 'All-Non-Motor':
+        test_All_Non_Motor()
+    elif sys.argv[1] == 'All':
+        test_All()
