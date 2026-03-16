@@ -10,7 +10,7 @@ resource "docker_image" "root_base" {
   name = "local/root_base:latest"
   build {
     context    = ".." # Path to Root Dockerfile
-    dockerfile = "/docker/images/root/Dockerfile"
+    dockerfile = "docker/images/root/Dockerfile"
   }
 }
 
@@ -19,7 +19,7 @@ resource "docker_image" "python_middleware" {
   name = "local/python_middleware:latest"
   build {
     context    = ".."
-    dockerfile = "/docker/images/middleware/Dockerfile"
+    dockerfile = "docker/images/middleware/Dockerfile"
   }
   # Ensure Root is built first
   depends_on = [docker_image.root_base]
@@ -30,7 +30,7 @@ resource "docker_image" "picar_server" {
   name = "local/picar-server:latest"
   build {
     context    = ".."
-    dockerfile = "/docker/images/server/Dockerfile"
+    dockerfile = "docker/images/server/Dockerfile"
   }
   # Ensure Middleware is built first
   depends_on = [docker_image.python_middleware]
@@ -41,7 +41,7 @@ resource "docker_image" "picar_client" {
   name = "local/picar-client:latest"
   build {
     context    = ".."
-    dockerfile = "/docker/images/client/Dockerfile"
+    dockerfile = "docker/images/client/Dockerfile"
   }
   depends_on = [docker_image.python_middleware]
 }
