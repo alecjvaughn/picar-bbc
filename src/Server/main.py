@@ -42,9 +42,6 @@ def mock_hardware():
 
 mock_hardware()
 
-from PyQt5.QtWidgets import QMainWindow, QApplication
-from PyQt5.QtCore import QTimer
-from server_ui import Ui_server_ui
 from server import Server
 import threading
 import multiprocessing
@@ -57,25 +54,8 @@ from buzzer import Buzzer
 from Thread import stop_thread
 from threading import Thread
 
-class mywindow(QMainWindow, Ui_server_ui):
+class PiCarServer:
     def __init__(self):
-        self.app = QApplication(sys.argv)
-        super(mywindow, self).__init__()
-        self.setupUi(self)
-        self.ui_button_state = True
-        self.config_task()
-        self.Button_Server.clicked.connect(self.on_pushButton_handle)
-        if self.ui_button_state:
-            self.on_pushButton_handle()
-        self.app.lastWindowClosed.connect(self.close_application)
-        signal.signal(signal.SIGINT, self.signal_handler)
-
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.check_signals)
-        self.timer.start(100)
-        self.time_record = time.time()
-
-    def config_task(self):
         self.tcp_server = Server()
         self.command = Command()
         self.led = Led()
@@ -113,24 +93,12 @@ class mywindow(QMainWindow, Ui_server_ui):
         self.camera.close()
         self.car.close()
 
-    def on_pushButton_handle(self):
-        if self.label.text() == "Server Off":
-            self.label.setText("Server On")
-            self.Button_Server.setText("Off")
-            self.tcp_server.start_tcp_servers()
-            self.set_threading_cmd_receive(True)
-            self.set_threading_video_send(True)
-            self.set_threading_car_task(True)
-            self.set_process_led_running(True)
-        elif self.label.text() == 'Server On':
-            self.label.setText("Server Off")
-            self.Button_Server.setText("On")
-            self.tcp_server.stop_tcp_servers()
-            self.set_threading_cmd_receive(False)
-            self.set_threading_video_send(False)
-            self.set_threading_car_task(False)
-            self.set_process_led_running(False)
-            self.tcp_server = Server()
+    def start(self):
+        self.tcp_server.start_tcp_servers()
+        self.set_threading_cmd_receive(True)
+        self.set_threading_video_send(True)
+        self.set_threading_car_task(True)
+        self.set_process_led_running(True)
 
     def send_sonic_data(self):
         if time.time() - self.send_sonic_data_time > 0.5:
@@ -431,8 +399,7 @@ class mywindow(QMainWindow, Ui_server_ui):
             print("LED process interrupted, cleaning up...")
             self.led.colorBlink(0)
 
-    def close_application(self):
-        self.ui_button_state = False
+    def stop(self):
         self.set_threading_cmd_receive(False)
         self.set_threading_video_send(False)
         self.set_threading_car_task(False)
@@ -449,18 +416,7 @@ class mywindow(QMainWindow, Ui_server_ui):
             self.car_thread.join(0.1)
         if self.led_process and self.led_process.is_alive():
             self.led_process.join(0.1)
-        self.app.quit()
         sys.exit(1)
-
-    def signal_handler(self, signal, frame):
-        print("Caught Ctrl+C, stopping application...")
-        self.close_application()
-
-    def check_signals(self):
-        if self.app.hasPendingEvents():
-            self.app.processEvents()
-        if not self.ui_button_state and not self.cmd_thread_is_running and not self.video_thread_is_running and not self.led_process_is_running and not self.action_process_is_running:
-            self.app.quit()
 
 if __name__ == '__main__':
     # Parse command line arguments
@@ -470,17 +426,19 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    # Check if either flag is set
-    headless_mode = args.terminal or args.no_gui
-    if headless_mode:
-        # Run in headless mode - only start server functionality
-        app = QApplication(sys.argv)
-        server_window = mywindow()
+    server = PiCarServer()
+    server.start()
+
+    def signal_handler(sig, frame):
+        print("Caught Ctrl+C, stopping application...")
+        server.stop()
         
-        # Start the server automatically
-        if server_window.label.text() == "Server Off":
-            server_window.on_pushButton_handle()
-        
-        # Handle Ctrl+C gracefully
-        signal.signal(signal.SIGINT, server_window.signal_handler)
+    # Handle Ctrl+C gracefully
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        signal_handler(None, None)
         

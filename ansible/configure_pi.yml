@@ -15,7 +15,7 @@
     create: yes
   notify: Reboot Pi
 
-- name: Configure Camera settings (Legacy V4L2 Stack for OpenCV)
+- name: Configure Camera settings (Libcamera Stack)
   ansible.builtin.lineinfile:
     path: /boot/firmware/config.txt
     regexp: "^{{ item.regexp }}"
@@ -23,7 +23,7 @@
     create: yes
   loop:
     - { regexp: 'camera_auto_detect=', line: 'camera_auto_detect=0' }
-    - { regexp: 'start_x=', line: 'start_x=1' }
+    - { regexp: 'start_x=', line: 'start_x=0' }
     - { regexp: 'gpu_mem=', line: 'gpu_mem=128' }
   notify: Reboot Pi
 

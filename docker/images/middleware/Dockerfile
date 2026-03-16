@@ -21,16 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-rpi-lgpio \
     python3-smbus \
     python3-spidev \
-    # GUI & Display (Qt/X11)
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libx11-xcb1 \
-    libxcb-cursor0 \
-    libxcb-xinerama0 \
-    libxkbcommon-x11-0 \
-    python3-pyqt5 \
-    qt5-qmake \
-    qtbase5-dev \
     # Python Science/Image
     python3-opencv \
     python3-numpy \

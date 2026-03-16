@@ -9,7 +9,7 @@ WORKDIR /app
 COPY --chown=secureuser:pipeline src/requirements.txt .
 
 # 3. Install Libraries
-RUN grep -v -e "PyQt5" -e "opencv-python-headless" requirements.txt > requirements.tmp && pip install --no-cache-dir -r requirements.tmp && rm requirements.tmp
+RUN grep -v -e "opencv-python-headless" requirements.txt > requirements.tmp && pip install --no-cache-dir -r requirements.tmp && rm requirements.tmp
 
 # 4. Application Logic
 COPY --chown=secureuser:pipeline src/Server /app/Server
@@ -21,6 +21,5 @@ EXPOSE 5000
 EXPOSE 8000
 
 # 6. Runtime Configuration
-ENV QT_QPA_PLATFORM=offscreen
 WORKDIR /app/Server
 CMD ["python3", "main.py", "--no-gui"]

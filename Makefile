@@ -406,7 +406,7 @@ install:
 	@. venv/bin/activate && pip install --upgrade pip
 	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
 		echo "Raspberry Pi detected. Installing requirements, excluding those provided by apt..."; \
-		grep -v -e "PyQt5" -e "numpy" -e "gpiozero" -e "opencv-python-headless" src/requirements.txt > requirements.tmp; \
+		grep -v -e "numpy" -e "gpiozero" -e "opencv-python-headless" src/requirements.txt > requirements.tmp; \
 		. venv/bin/activate && pip install -r requirements.tmp; \
 		rm requirements.tmp; \
 	else \
@@ -423,7 +423,7 @@ rebuild-hardware:
 venv:
 	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
 		echo "Raspberry Pi detected. Installing system dependencies..."; \
-		sudo apt-get update && sudo apt-get install -y python3-dev python3-pyqt5 python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good; \
+		sudo apt-get update && sudo apt-get install -y python3-dev python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good; \
 		test -d venv || python3 -m venv venv --system-site-packages; \
 	else \
 		test -d venv || python3 -m venv venv; \
