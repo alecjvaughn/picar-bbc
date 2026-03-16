@@ -383,16 +383,24 @@ ansible-deploy:
 		echo "  - If running on the Pi: Install Ansible ('sudo apt install ansible')."; \
 		exit 1; \
 	fi
-	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
-	if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then EXTRA_VARS="$$EXTRA_VARS -e tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"; fi; \
-	if [ -n "$(REPO_URL)" ]; then EXTRA_VARS="$$EXTRA_VARS -e repo_url=$(REPO_URL)"; fi; \
-	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
-	if [ -n "$(BUILD_ARGS)" ]; then EXTRA_VARS="$$EXTRA_VARS -e build_args=\"$(BUILD_ARGS)\""; fi; \
-	if [ "$(CLEAN)" = "true" ]; then EXTRA_VARS="$$EXTRA_VARS -e force_clean=true"; fi; \
-	echo "📦 Phase 1: Provisioning System & Hardware..." && \
-	ansible-playbook $(ANSIBLE_INVENTORY) ansible/provision.yml $$EXTRA_VARS $(ANSIBLE_ARGS) && \
-	echo "🚀 Phase 2: Deploying Application..." && \
-	ansible-playbook $(ANSIBLE_INVENTORY) ansible/deploy.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+	@echo "📦 Phase 1: Provisioning System & Hardware..."
+	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/provision.yml \
+		-e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
+		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
+		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
+		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
+		$(if $(BUILD_ARGS),-e 'build_args=$(BUILD_ARGS)') \
+		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
+		$(ANSIBLE_ARGS)
+	@echo "🚀 Phase 2: Deploying Application..."
+	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/deploy.yml \
+		-e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
+		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
+		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
+		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
+		$(if $(BUILD_ARGS),-e 'build_args=$(BUILD_ARGS)') \
+		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
+		$(ANSIBLE_ARGS)
 
 ansible-test:
 	@if [ -z "$(COMPONENT)" ]; then \
@@ -401,23 +409,27 @@ ansible-test:
 		exit 1; \
 	fi
 	@echo "🧪 Running hardware test via Ansible for $(COMPONENT)..."
-	@EXTRA_VARS="-e component=$(COMPONENT) -e server_image=$(SERVER_IMAGE)"; \
-	if [ -n "$(DURATION)" ]; then EXTRA_VARS="$$EXTRA_VARS -e test_duration=$(DURATION)"; fi; \
-	if [ -n "$(RESTART)" ]; then EXTRA_VARS="$$EXTRA_VARS -e restart=$(RESTART)"; fi; \
-	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
-	ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/test.yml \
+		-e "component=$(COMPONENT)" \
+		-e "server_image=$(SERVER_IMAGE)" \
+		$(if $(DURATION),-e "test_duration=$(DURATION)") \
+		$(if $(RESTART),-e "restart=$(RESTART)") \
+		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
+		$(ANSIBLE_ARGS)
 
 ansible-reboot:
 	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
-	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
-	ansible-playbook $(ANSIBLE_INVENTORY) ansible/reboot.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/reboot.yml \
+		-e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
+		$(ANSIBLE_ARGS)
 
 ansible-nuke:
 	@echo "☢️  Nuking project directory on $(ANSIBLE_TARGET_HOSTS)..."
 	@read -p "Are you sure you want to delete the project directory on the remote host? [y/N] " ans && [ $${ans:-N} = y ]
-	@EXTRA_VARS="-e target_hosts=$(ANSIBLE_TARGET_HOSTS)"; \
-	if [ -n "$(PROJECT_DIR)" ]; then EXTRA_VARS="$$EXTRA_VARS -e project_dir=$(PROJECT_DIR)"; fi; \
-	ansible-playbook $(ANSIBLE_INVENTORY) ansible/nuke.yml $$EXTRA_VARS $(ANSIBLE_ARGS)
+	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/nuke.yml \
+		-e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
+		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
+		$(ANSIBLE_ARGS)
 
 # ==============================================================================
 # Local Development
