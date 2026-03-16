@@ -19,10 +19,17 @@ class Camera:
         if self.cap is not None and self.cap.isOpened():
             return
         
-        # Open default camera (index 0)
-        self.cap = cv2.VideoCapture(0)
+        # Scan common indices to find the actual capture node.
+        # On modern Pi OS (Bookworm), the camera might be mapped to index 0, 
+        # or it might be pushed to index 11+ by the libcamera stack.
+        for index in [0, 11, 12, 13, 14, 15, -1]:
+            # Explicitly request V4L2 backend for Linux
+            self.cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
+            if self.cap.isOpened():
+                break
+                
         if not self.cap.isOpened():
-            print("Error: Could not open video device.")
+            print("Error: Could not open video device on any index.")
             return
 
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, size[0])

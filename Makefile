@@ -88,7 +88,7 @@ help:
 	@echo "  make logs                : View server logs"
 	@echo ""
 	@echo "Testing & Hardware Control:"
-	@echo "  make test-hardware       : Run hardware component tests (stops server)"
+	@echo "  make test-hardware       : Run hardware component tests (stops server, restarts by default)"
 	@echo "  make test-all            : Run all hardware component tests locally"
 	@echo "  make test-exec           : Run hardware tests inside running server (fast, potential conflicts)"
 	@echo "  make stop-server-app     : Kill the Python app inside container (keeps container alive)"
@@ -214,11 +214,7 @@ docker-run-server: docker-build create-network
 		--network $(NETWORK_NAME) \
 		--privileged \
 		-u root \
-		--device /dev/i2c-1 \
-		--device /dev/video0 \
-		--device /dev/spidev0.0 \
-		--device /dev/spidev0.1 \
-		--device /dev/gpiomem \
+		-v /dev:/dev \
 		-v /run/udev:/run/udev:ro \
 		-v /tmp:/tmp \
 		$(PORTS) \
@@ -307,47 +303,29 @@ logs:
 
 # Non-interactive test runner for automation/Ansible
 docker-run-test:
-	docker run --rm --privileged \
-		-u root \
-		--device /dev/i2c-1 \
-		--device /dev/video0 \
-		--device /dev/spidev0.0 \
-		--device /dev/spidev0.1 \
-		--device /dev/gpiomem \
-		-v /run/udev:/run/udev:ro \
-		-v /tmp:/tmp \
-		$(SERVER_IMAGE) \
-		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),60s) python test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
+	docker exec -u root $(SERVER_NAME) \
+		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),60s) python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
 
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
-		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor>"; \
+		echo "Usage: make test-hardware COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor> [RESTART=true|false]"; \
 		exit 1; \
 	fi
-	@echo "⚠️  Stopping $(SERVER_NAME) to free up hardware resources..."
-	-docker stop $(SERVER_NAME) 2>/dev/null || true
-	@echo "🧪 Running hardware test for $(COMPONENT)..."
-	docker run --rm -it --privileged \
-		-u root \
-		--device /dev/i2c-1 \
-		--device /dev/video0 \
-		--device /dev/spidev0.0 \
-		--device /dev/spidev0.1 \
-		--device /dev/gpiomem \
-		-v /run/udev:/run/udev:ro \
-		-v /tmp:/tmp \
-		$(SERVER_IMAGE) \
-		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),15s) python test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
-	@if [ "$(RESTART)" = "true" ]; then \
-		echo "🔄 Restarting $(SERVER_NAME)..."; \
-		$(MAKE) docker-run-server; \
+	@echo "⚠️  Stopping Python app in $(SERVER_NAME) to free up hardware resources..."
+	-$(MAKE) stop-server-app
+	@echo "🧪 Running hardware test for $(COMPONENT) inside $(SERVER_NAME)..."
+	docker exec -it -u root $(SERVER_NAME) \
+		/bin/bash -c "timeout --signal=2 $(if $(DURATION),$(DURATION),15s) python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
+	@if [ "$(RESTART)" != "false" ]; then \
+		echo "🔄 Restarting Python app in $(SERVER_NAME)..."; \
+		$(MAKE) start-server-app; \
 	fi
 
 test-all:
 	@echo "🧪 Running ALL hardware tests locally..."
 	$(MAKE) test-hardware COMPONENT=All-Non-Motor RESTART=false DURATION=30s
-	$(MAKE) test-hardware COMPONENT=All-Motor RESTART=true DURATION=30s
+	$(MAKE) test-hardware COMPONENT=All-Motor DURATION=30s
 
 test-exec:
 	@if [ -z "$(COMPONENT)" ]; then \
@@ -402,7 +380,7 @@ ansible-test:
 ansible-test-all:
 	@echo "🧪 Running ALL hardware tests via Ansible..."
 	$(MAKE) ansible-test COMPONENT=All-Non-Motor RESTART=false
-	$(MAKE) ansible-test COMPONENT=All-Motor RESTART=true
+	$(MAKE) ansible-test COMPONENT=All-Motor
 
 ansible-reboot:
 	@echo "🔄 Rebooting $(ANSIBLE_TARGET_HOSTS) and checking health..."
