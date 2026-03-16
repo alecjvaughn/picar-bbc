@@ -24,6 +24,13 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
+    - name: Nuke existing Docker images and BuildKit cache (if requested)
+      community.general.make:
+        chdir: "{{ project_dir }}"
+        target: docker-clean
+      become: false
+      when: force_clean | default(false) | bool
+
     - name: Force Remove Existing Containers (Ensure Clean Restart)
       command: docker rm -f picar-server picar-tunnel
       ignore_errors: yes
