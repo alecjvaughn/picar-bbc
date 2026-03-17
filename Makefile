@@ -253,6 +253,7 @@ docker-run-server: docker-build create-network
 		--privileged \
 		-u root \
 		-v /dev/shm:/dev/shm \
+		-v /tmp:/tmp \
 		-v /run/udev:/run/udev:ro \
 		$(PORTS) \
 		$(SERVER_IMAGE) \
