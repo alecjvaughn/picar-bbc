@@ -45,6 +45,10 @@
       ignore_errors: yes
       changed_when: false
 
+    - name: Record Build Start Time
+      debug:
+        msg: "Starting Docker build at {{ lookup('pipe', 'date') }}. This may take up to 1 hour on a fresh Pi..."
+
     - name: Build and Run Server (Docker)
       community.general.make:
         chdir: "{{ project_dir }}"
@@ -52,13 +56,29 @@
         params:
           BUILD_ARGS: "{{ build_args | default('') }} --progress=plain"
       become: false
-      async: 900
-      poll: 10
+      async: 3600
+      poll: 0
+      register: docker_build_async
+
+    - name: Record Build Job ID
+      debug:
+        msg: "Build running in background (Job ID: {{ docker_build_async.ansible_job_id }}). Polling every 10s..."
+
+    - name: Wait for Docker build to complete (Countdown = Minutes left x 6)
+      async_status:
+        jid: "{{ docker_build_async.ansible_job_id }}"
       register: docker_build_out
+      until: docker_build_out.finished
+      retries: 360
+      delay: 10
 
     - name: Display Docker Build Output
       debug:
         var: docker_build_out.stderr_lines
+
+    - name: Record Build End Time
+      debug:
+        msg: "Docker build completed at {{ lookup('pipe', 'date') }}."
 
     - name: Build and Run Tunnel (Docker)
       community.general.make:
