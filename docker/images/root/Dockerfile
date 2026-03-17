@@ -13,7 +13,7 @@ RUN apt-get update && apt-get upgrade -y && \
     # Add Raspberry Pi Package Repository (Required for picamera2/libcamera)
     curl -fsSL https://archive.raspberrypi.org/debian/raspberrypi.gpg.key | gpg --dearmor -o /usr/share/keyrings/raspberrypi-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.gpg] http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list && \
-    apt-get update && \
+    apt-get update && apt-get dist-upgrade -y && \
     # Clean up apt cache to keep image small
     rm -rf /var/lib/apt/lists/*
 
