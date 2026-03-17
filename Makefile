@@ -245,6 +245,7 @@ docker-run-server: docker-build create-network
 		--privileged \
 		-u root \
 		-v /dev/shm:/dev/shm \
+		-v /run/udev:/run/udev:ro \
 		$(PORTS) \
 		$(SERVER_IMAGE) \
 		/bin/bash -c "python3 main.py --no-gui & python3 WebAPI.py"
@@ -466,7 +467,7 @@ rebuild-hardware:
 venv:
 	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
 		echo "Raspberry Pi detected. Installing system dependencies..."; \
-		sudo apt-get update && sudo apt-get install -y python3-dev python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good; \
+		sudo apt-get update && sudo apt-get install -y python3-dev python3-pyqt5 python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-picamera2; \
 		test -d venv || python3 -m venv venv --system-site-packages; \
 	else \
 		test -d venv || python3 -m venv venv; \

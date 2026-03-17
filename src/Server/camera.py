@@ -7,8 +7,10 @@ import numpy as np
 
 class Camera:
     def __init__(self, preview_size: tuple = (640, 480), hflip: bool = False, vflip: bool = False, stream_size: tuple = (400, 300)):
-        """Initialize the Camera class using OpenCV."""
+        """Initialize the Camera class."""
         self.cap = None
+        self.picam2 = None
+        self.is_rpi_camera = False
         self.preview_size = preview_size
         self.stream_size = stream_size
         self.hflip = hflip
@@ -19,7 +21,7 @@ class Camera:
 
     def _open_camera(self, size: tuple):
         """Internal method to open the camera with a specific resolution."""
-        if self.cap is not None and self.cap.isOpened():
+        if self.picam2 is not None or (self.cap is not None and self.cap.isOpened()):
             return
         
         # Detect if we are on the physical Raspberry Pi hardware
@@ -32,38 +34,56 @@ class Camera:
             pass
 
         if is_rpi:
-            # Use the modern libcamera stack via GStreamer
-            pipeline = f"libcamerasrc ! video/x-raw, width={size[0]}, height={size[1]}, framerate=15/1 ! videoconvert ! appsink drop=true max-buffers=1"
-            self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            try:
+                from picamera2 import Picamera2
+                self.picam2 = Picamera2()
+                # Create a video configuration with the requested size
+                config = self.picam2.create_video_configuration(main={"size": size, "format": "RGB888"})
+                self.picam2.configure(config)
+                self.picam2.start()
+                self.is_rpi_camera = True
+                print("✅ Picamera2 initialized successfully.")
+            except Exception as e:
+                print(f"Error initializing Picamera2: {e}")
+                self.is_rpi_camera = False
         else:
             # Local mock: Use the computer's built-in webcam
             self.cap = cv2.VideoCapture(0)
+            self.is_rpi_camera = False
 
-        if not self.cap.isOpened():
-            device_name = "libcamerasrc" if is_rpi else "local webcam (index 0)"
-            print(f"Error: Could not open video device using {device_name}. Is the camera connected?")
+        if not self.is_rpi_camera and (not self.cap or not self.cap.isOpened()):
+            print("Error: Could not open local video device.")
             return
 
     def start_image(self, show_preview: bool = False) -> None:
-        """Start the camera (OpenCV VideoCapture)."""
+        """Start the camera."""
         self._open_camera(self.preview_size)
-        # Note: show_preview is ignored in headless/server context to avoid X11 errors.
 
     def save_image(self, filename: str) -> dict:
         """Capture and save an image to the specified file."""
-        if self.cap is None or not self.cap.isOpened():
+        if not self.is_rpi_camera and (self.cap is None or not self.cap.isOpened()):
             self._open_camera(self.preview_size)
-            # If we just cold-started the camera, give the Auto-Exposure time to settle
-            time.sleep(2.0)
-        
-        # Flush the buffer. Because we use 'drop=true max-buffers=1', GStreamer 
-        # might be holding onto a dark frame from a few seconds ago. Reading 
-        # several frames guarantees we get the freshest, fully-exposed image.
-        for _ in range(15):
-            self.cap.read()
+        elif self.is_rpi_camera and self.picam2 is None:
+            self._open_camera(self.preview_size)
             
-        ret, frame = self.cap.read()
-        if ret:
+        ret = False
+        frame = None
+        
+        if self.is_rpi_camera:
+            try:
+                # Picamera2 automatically handles auto-exposure warmup
+                frame = self.picam2.capture_array()
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) # Convert RGB to BGR for OpenCV
+                ret = True
+            except Exception as e:
+                print(f"Picamera2 capture error: {e}")
+        else:
+            time.sleep(2.0)
+            for _ in range(15):
+                self.cap.read()
+            ret, frame = self.cap.read()
+
+        if ret and frame is not None:
             if self.hflip:
                 frame = cv2.flip(frame, 1)
             if self.vflip:
@@ -71,15 +91,17 @@ class Camera:
             cv2.imwrite(filename, frame)
             return {"filename": filename}
         else:
-            backend = self.cap.getBackendName() if self.cap else "Unknown"
-            print(f"Error: Could not read frame. Video Backend: {backend}")
-            print(f"Camera State -> Opened: {self.cap.isOpened() if self.cap else False}, Resolution: {self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x{self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
+            print("Error: Could not read frame.")
             return None
 
     def start_stream(self, filename: str = None) -> None:
         """Start the video stream or recording."""
-        # Re-open or re-configure for stream size
-        if self.cap is not None and self.cap.isOpened():
+        if self.is_rpi_camera and self.picam2 is not None:
+            self.picam2.stop()
+            config = self.picam2.create_video_configuration(main={"size": self.stream_size, "format": "RGB888"})
+            self.picam2.configure(config)
+            self.picam2.start()
+        elif self.cap is not None and self.cap.isOpened():
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.stream_size[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.stream_size[1])
         else:
@@ -91,8 +113,8 @@ class Camera:
             self.recording = True
             # Define the codec and create VideoWriter object
             fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-            w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            w = self.stream_size[0]
+            h = self.stream_size[1]
             self.video_writer = cv2.VideoWriter(filename, fourcc, 20.0, (w, h))
 
     def stop_stream(self) -> None:
@@ -105,11 +127,20 @@ class Camera:
 
     def get_frame(self) -> bytes:
         """Get the current frame from the streaming output."""
-        if self.cap is None or not self.cap.isOpened():
-            return b''
+        ret = False
+        frame = None
+
+        if self.is_rpi_camera and self.picam2 is not None:
+            try:
+                frame = self.picam2.capture_array()
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                ret = True
+            except Exception:
+                pass
+        elif self.cap is not None and self.cap.isOpened():
+            ret, frame = self.cap.read()
             
-        ret, frame = self.cap.read()
-        if not ret:
+        if not ret or frame is None:
             return b''
             
         if self.hflip:
@@ -137,8 +168,13 @@ class Camera:
 
     def close(self) -> None:
         """Close the camera."""
+        if self.is_rpi_camera and self.picam2:
+            self.picam2.stop()
+            self.picam2.close()
+            self.picam2 = None
         if self.cap and self.cap.isOpened():
             self.cap.release()
+            self.cap = None
         if self.video_writer:
             self.video_writer.release()
 

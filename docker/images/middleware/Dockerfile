@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-libcamera \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
+    python3-picamera2 \
     && curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb \
     && dpkg -i cloudflared.deb \
     && rm cloudflared.deb \
