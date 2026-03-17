@@ -67,40 +67,28 @@ endif
 .PHONY: help help-all
 help:
 	@echo "--------------------------------------------------------------------------------"
-	@echo "Picar-BBC Makefile - Core Workflow"
-	@echo "Run 'make help-all' to see the comprehensive list of all commands."
+	@echo "Picar-BBC Makefile - Primary Workflow"
+	@echo "Run 'make help-all' to see all available commands."
 	@echo "--------------------------------------------------------------------------------"
-	@echo "Local Development:"
-	@echo "  make run-dev             : Run full local dev stack (Server + API + React Client)"
-	@echo "  make test-dev            : Spawn both backend and frontend test runners in new terminals"
-	@echo "  make dev-all             : Run local dev stack AND tests simultaneously"
-	@echo "  make clean-install       : Wipe and reinstall all Node and Python dependencies"
-	@echo "  make clean-terminals     : Manually clean up spawned development terminals/processes"
+	@echo "Deployment & Testing (from your computer):"
+	@echo "  make deploy              : Deploy/update the application on the Raspberry Pi."
+	@echo '                             (Optional: BRANCH=my-feature, CLEAN=true)'
+	@echo "  make test                : Run a hardware test on the Pi."
+	@echo '                             (Optional: COMPONENT=<Led|Motor|...|All> DURATION=60s)'
+	@echo "  make logs                : View live server logs from the Pi."
 	@echo ""
-	@echo "Deployment & Hardware:"
-	@echo "  make ansible-deploy      : Configure the Raspberry Pi and deploy the application"
-	@echo '                             (Optional: BRANCH=my-feature, CLEAN=true, BUILD_ARGS="...")'
-	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
-	@echo '                             (Optional: COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s])'
-	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
-	@echo '                             (Optional: COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s])'
-	@echo "  make logs                : View live server logs from the Pi container"
+	@echo "Local Development (on your computer):"
+	@echo "  make run-dev             : Run the full local dev stack (mock server, API, web client)."
+	@echo "  make test-dev            : Run backend and frontend unit tests in watch mode."
 	@echo ""
-	@echo "Remote Access:"
-	@echo "  make tunnels             : Open local access to Pi ports via Cloudflare (macOS)"
+	@echo "On-Pi Commands (when SSH'd into the Pi):"
+	@echo "  make test-hardware       : Run a hardware test directly on the Pi."
 	@echo "--------------------------------------------------------------------------------"
 
 help-all:
 	@echo "--------------------------------------------------------------------------------"
 	@echo "Picar-BBC Makefile - Comprehensive Commands"
 	@echo "--------------------------------------------------------------------------------"
-	@echo "Terraform Workflow (Preferred):"
-	@echo "  make up                  : Provision infrastructure (Builds images, starts containers)"
-	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local)"
-	@echo "  make down                : Destroy infrastructure"
-	@echo "  make reload              : Taint server image and apply (Hot reload)"
-	@echo "  make tf-clean            : Clean Terraform state"
-	@echo ""
 	@echo "Docker Manual Workflow:"
 	@echo "  make docker-build        : Build all Docker images"
 	@echo "  make docker-rebuild      : Rebuild all Docker images (no cache)"
@@ -144,7 +132,7 @@ help-all:
 	@echo "  make run-server          : Run server locally"
 	@echo "  make run-api             : Run FastAPI middleman locally"
 	@echo "  make run-dev             : Run full local dev stack (Server + API + React Client)"
-	@echo "  make run-client          : Run client locally"
+	@echo "  make run-client          : Run React client development server locally"
 	@echo "  make clean-install       : Clean node_modules (if applicable) and reinstall"
 	@echo "  make clean-terminals     : Manually clean up spawned development terminals/processes"
 	@echo "  make tunnel-control      : Open local access to remote control port (5050)"
@@ -153,61 +141,15 @@ help-all:
 	@echo "--------------------------------------------------------------------------------"
 
 # ==============================================================================
-# Terraform Workflow
+# Primary Workflow
 # ==============================================================================
 
-.PHONY: tf-init tf-apply tf-destroy up down reload tf-clean ansible-reboot ansible-nuke
+.PHONY: deploy test
 
-tf-init:
-	cd $(TF_DIR) && terraform init
+deploy: ansible-deploy
+	@echo "✅ Deployment complete."
 
-up:
-	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
-		echo "🍓 Raspberry Pi detected. Switching to Docker Manual Workflow (Server Only)..."; \
-		$(MAKE) docker-run-server; \
-		if [ -n "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
-			echo "🚇 Starting Cloudflare Tunnel..."; \
-			$(MAKE) docker-run-tunnel; \
-		fi; \
-	else \
-		$(MAKE) tf-apply; \
-	fi
-
-tf-apply: tf-init
-	@if [ -n "$(LOCAL_RASPI_CONNECTION)" ]; then \
-		echo "🚀 Deploying to REMOTE host: $(LOCAL_RASPI_CONNECTION)"; \
-	else \
-		echo "💻 Deploying to LOCAL host"; \
-	fi
-	@if [ -z "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
-		echo "⚠️  CLOUDFLARED_TUNNEL_TOKEN is not set. Cloudflare Tunnel will be SKIPPED (or destroyed if it exists)."; \
-	else \
-		echo "✅  CLOUDFLARED_TUNNEL_TOKEN found. Cloudflare Tunnel will be deployed."; \
-	fi
-	@echo "Ensuring manual container is removed to prevent port conflicts..."
-	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
-	cd $(TF_DIR) && terraform apply -auto-approve -var="tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)"
-
-down:
-	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
-		echo "🍓 Raspberry Pi detected. Stopping manual containers..."; \
-		$(MAKE) docker-down; \
-	else \
-		$(MAKE) tf-destroy; \
-	fi
-
-tf-destroy:
-	cd $(TF_DIR) && terraform destroy -auto-approve
-	@echo "Cleaning up dangling images and networks..."
-	-docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) 2>/dev/null || true
-	-docker network rm data_platform_network 2>/dev/null || true
-
-reload:
-	cd $(TF_DIR) && terraform taint docker_image.picar_server
-	cd $(TF_DIR) && terraform apply -auto-approve
-
-tf-clean:
-	rm -rf $(TF_DIR)/.terraform $(TF_DIR)/.terraform.lock.hcl $(TF_DIR)/terraform.tfstate $(TF_DIR)/terraform.tfstate.backup
+test: ansible-test
 
 # ==============================================================================
 # Docker Manual Workflow
@@ -323,13 +265,15 @@ logs:
 # Testing Workflow
 # ==============================================================================
 
-.PHONY: docker-run-test test-hardware test-exec
+.PHONY: docker-run-test test-hardware test-exec test-unit test-ui test-dev
 
 # Non-interactive test runner for automation/Ansible
 docker-run-test:
 	docker exec -u root $(SERVER_NAME) \
 		/bin/bash -c "timeout --signal=2 $${DURATION:-60s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
 
+# `test` is the main entrypoint which aliases to `ansible-test`
+# `test-hardware` is for running tests directly on the Pi when SSH'd in.
 test-hardware:
 	@if [ -z "$(COMPONENT)" ]; then \
 		echo "Error: COMPONENT argument is required."; \
@@ -379,7 +323,7 @@ test-dev:
 # Ansible Workflow
 # ==============================================================================
 
-.PHONY: ansible-ping ansible-deploy ansible-provision ansible-deploy-app
+.PHONY: ansible-ping ansible-deploy ansible-provision ansible-deploy-app ansible-reboot ansible-nuke
 
 # Common arguments for Ansible provision and deploy phases
 ANSIBLE_PLAYBOOK_ARGS = -e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
@@ -483,7 +427,7 @@ rebuild-hardware:
 venv:
 	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
 		echo "Raspberry Pi detected. Installing system dependencies..."; \
-		sudo apt-get update && sudo apt-get install -y python3-dev python3-pyqt5 python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-picamera2; \
+		sudo apt-get update && sudo apt-get install -y python3-dev python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-picamera2; \
 		test -d venv || python3 -m venv venv --system-site-packages; \
 	else \
 		test -d venv || python3 -m venv venv; \
@@ -532,7 +476,8 @@ run-dev:
 	fi
 
 run-client:
-	. venv/bin/activate && python3 src/Client/Qt/Main.py
+	@echo "Starting React client development server on all interfaces..."
+	npm run dev -- --host
 
 tunnel-control:
 	@echo "Opening control tunnel to $(TUNNEL_HOSTNAME) on localhost:5050..."
