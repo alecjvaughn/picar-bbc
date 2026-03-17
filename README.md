@@ -97,7 +97,19 @@ Alternatively, you can use Ansible to automate the setup and deployment from you
     make ansible-deploy
     ```
 
-### 5. Deploying Feature Branches
+### 5. Deploying Ansible Phases Manually
+The `make ansible-deploy` command runs two phases sequentially. You can also trigger them individually:
+
+*   **Phase 1 (Provisioning)**: Configures system dependencies, hardware interfaces, and Docker.
+    ```bash
+    make ansible-provision
+    ```
+*   **Phase 2 (Deployment)**: Clones the repository, builds Docker images, and starts the application.
+    ```bash
+    make ansible-deploy-app
+    ```
+
+### 6. Deploying Feature Branches
 To deploy a specific branch to the Pi instead of `main`, pass the `BRANCH` argument to your deployment command:
 ```bash
 make ansible-deploy BRANCH=my-feature-branch
@@ -111,9 +123,9 @@ make ansible-nuke
 ```
 OR - *to aggressively nuke all Docker containers, images, networks, and build cache*
 ```bash
-docker system prune -a --volumes -f docker builder prune -a -f
-# Then remove the project directory
-cd ~ rm -rf path/to/picar-bbc
+docker system prune -a --volumes -f && docker builder prune -a -f
+# ...Then remove the project directory
+cd ~ rm && -rf path/to/picar-bbc
 ```
 
 If you want to only provision the OS but run the Docker builds manually (to see real-time output instead of Ansible's background polling):

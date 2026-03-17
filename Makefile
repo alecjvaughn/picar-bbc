@@ -130,6 +130,8 @@ help-all:
 	@echo '                             (Optional: BRANCH=my-feature to deploy a specific branch)'
 	@echo '                             (Optional: CLEAN=true to nuke images/cache before deploy)'
 	@echo '                             (Optional: BUILD_ARGS="--build-arg CACHE_BUST=$$(date +%s)" to force apt update)'
+	@echo "  make ansible-provision   : Run only Phase 1 (OS/Hardware dependencies)"
+	@echo "  make ansible-deploy-app  : Run only Phase 2 (Docker builds and App deployment)"
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
 	@echo "  make ansible-reboot      : Reboot the Pi and poll for system health"
 	@echo "                             (Optional: LOCAL_RASPI_CONNECTION=pi@picar.local or set in .env)"
@@ -376,11 +378,29 @@ test-dev:
 # Ansible Workflow
 # ==============================================================================
 
-.PHONY: ansible-ping ansible-deploy
+.PHONY: ansible-ping ansible-deploy ansible-provision ansible-deploy-app
+
+# Common arguments for Ansible provision and deploy phases
+ANSIBLE_PLAYBOOK_ARGS = -e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
+	$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
+	$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
+	$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
+	$(if $(BRANCH),-e "branch=$(BRANCH)") \
+	$(if $(BUILD_ARGS),-e "build_args='$(BUILD_ARGS)'") \
+	$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
+	$(ANSIBLE_ARGS)
 
 ansible-ping:
 	@echo "📡 Pinging host using inventory: $(if $(ANSIBLE_INVENTORY),$(ANSIBLE_INVENTORY),default (ansible.cfg))"
 	ansible $(ANSIBLE_INVENTORY) $(ANSIBLE_TARGET_HOSTS) -m ping $(ANSIBLE_ARGS)
+
+ansible-provision:
+	@echo "📦 Phase 1: Provisioning System & Hardware..."
+	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/provision.yml $(ANSIBLE_PLAYBOOK_ARGS)
+
+ansible-deploy-app:
+	@echo "🚀 Phase 2: Deploying Application..."
+	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/deploy.yml $(ANSIBLE_PLAYBOOK_ARGS)
 
 ansible-deploy:
 	@echo "🚀 Deploying to host using inventory: $(if $(ANSIBLE_INVENTORY),$(ANSIBLE_INVENTORY),default (ansible.cfg))"
@@ -390,26 +410,8 @@ ansible-deploy:
 		echo "  - If running on the Pi: Install Ansible ('sudo apt install ansible')."; \
 		exit 1; \
 	fi
-	@echo "📦 Phase 1: Provisioning System & Hardware..."
-	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/provision.yml \
-		-e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
-		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
-		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
-		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
-		$(if $(BRANCH),-e "branch=$(BRANCH)") \
-		$(if $(BUILD_ARGS),-e "build_args='$(BUILD_ARGS)'") \
-		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
-		$(ANSIBLE_ARGS)
-	@echo "🚀 Phase 2: Deploying Application..."
-	@ansible-playbook $(ANSIBLE_INVENTORY) ansible/deploy.yml \
-		-e "target_hosts=$(ANSIBLE_TARGET_HOSTS)" \
-		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
-		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
-		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
-		$(if $(BRANCH),-e "branch=$(BRANCH)") \
-		$(if $(BUILD_ARGS),-e "build_args='$(BUILD_ARGS)'") \
-		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
-		$(ANSIBLE_ARGS)
+	@$(MAKE) --no-print-directory ansible-provision
+	@$(MAKE) --no-print-directory ansible-deploy-app
 
 ansible-test:
 	@if [ -z "$(COMPONENT)" ]; then \
