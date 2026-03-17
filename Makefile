@@ -81,9 +81,9 @@ help:
 	@echo "  make ansible-deploy      : Configure the Raspberry Pi and deploy the application"
 	@echo '                             (Optional: CLEAN=true or BUILD_ARGS="--build-arg CACHE_BUST=$$(date +%s)")'
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
-										COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s]
+	@echo '                             (Optional: COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s])'
 	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
-										COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s]
+	@echo '                             (Optional: COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s])'
 	@echo "  make logs                : View live server logs from the Pi container"
 	@echo ""
 	@echo "Remote Access:"
