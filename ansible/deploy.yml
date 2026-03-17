@@ -100,7 +100,10 @@
       register: api_status
       until: >
         api_status.status == 200 and
-        '"hardware_online": true' in api_status.content
+        (
+          '"hardware_online": true' in api_status.content or
+          '"hardware": "online"' in api_status.content
+        )
       retries: 10
       delay: 3
       ignore_errors: yes # We will handle the failure in the next task
@@ -110,4 +113,9 @@
         msg: >
           The API did not become healthy after deployment. It is not responding correctly at http://localhost:5050/status or the hardware is not online.
           Last response (status {{ api_status.status }}): {{ api_status.content | default('No content') }}
-      when: api_status.failed or not ('"hardware_online": true' in api_status.content)
+      when: >
+        api_status.failed or
+        not (
+          '"hardware_online": true' in api_status.content or
+          '"hardware": "online"' in api_status.content
+        )
