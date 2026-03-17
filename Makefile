@@ -155,9 +155,8 @@ deploy: ansible-deploy
 test: ansible-test
 
 redeploy:
-	@echo "🚨 Forcefully stopping all running picar containers on the remote host..."
-	@$(MAKE) --no-print-directory docker-down
-	@echo "🚀 Starting a clean deployment..."
+	@echo "🚀 Starting a clean redeployment..."
+	@echo "    This will stop containers, clear images, reboot the Pi, and then deploy."
 	@$(MAKE) --no-print-directory deploy CLEAN=true
 
 reboot: ansible-reboot
