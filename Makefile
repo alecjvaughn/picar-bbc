@@ -71,10 +71,13 @@ help:
 	@echo "Run 'make help-all' to see all available commands."
 	@echo "--------------------------------------------------------------------------------"
 	@echo "Deployment & Testing (from your computer):"
-	@echo "  make deploy              : Deploy/update the application on the Raspberry Pi."
+	@echo "  make deploy              : Deploy or update the application on the Raspberry Pi."
 	@echo '                             (Optional: BRANCH=my-feature, CLEAN=true)'
+	@echo "  make redeploy            : Force-stop containers and perform a clean deploy."
+	@echo '                             (Optional: BRANCH=my-feature)'
 	@echo "  make test                : Run a hardware test on the Pi."
 	@echo '                             (Optional: COMPONENT=<Led|Motor|...|All> DURATION=60s)'
+	@echo "  make reboot              : Reboot the Pi safely via Ansible."
 	@echo "  make logs                : View live server logs from the Pi."
 	@echo ""
 	@echo "Local Development (on your computer):"
@@ -144,12 +147,20 @@ help-all:
 # Primary Workflow
 # ==============================================================================
 
-.PHONY: deploy test
+.PHONY: deploy test redeploy reboot
 
 deploy: ansible-deploy
 	@echo "✅ Deployment complete."
 
 test: ansible-test
+
+redeploy:
+	@echo "🚨 Forcefully stopping all running picar containers on the remote host..."
+	@$(MAKE) --no-print-directory docker-down
+	@echo "🚀 Starting a clean deployment..."
+	@$(MAKE) --no-print-directory deploy CLEAN=true
+
+reboot: ansible-reboot
 
 # ==============================================================================
 # Docker Manual Workflow

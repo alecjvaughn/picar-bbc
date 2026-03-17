@@ -196,7 +196,7 @@ make test-hardware COMPONENT=Led RESTART=true
 
 ## Project Structure
 
-- **`src/Client/`**: PyQt5 GUI application code.
+- **`src/Client/`**: React-based web application code.
 - **`src/Server/`**: Python code for controlling Raspberry Pi hardware (GPIO, Camera, etc.).
 - **`src/Libs/`**: Custom libraries (e.g., `rpi_ws281x`).
 - **`docker/`**: Dockerfiles for Root, Middleware, Server, and Client images.
@@ -205,6 +205,9 @@ make test-hardware COMPONENT=Led RESTART=true
 
 ## Troubleshooting
 
+- **Application is stuck or unresponsive on the Pi**:
+    - If the Docker containers on the Pi are in a bad state, you can force a clean redeployment from your computer. This command will forcefully stop all project-related containers before starting a fresh deployment.
+    - `make redeploy`
 - **`make deploy` fails with permission errors**:
     - Ensure your user on the Pi is in the `docker` group (`sudo usermod -aG docker $USER`).
     - If your user requires a password for `sudo`, use `make deploy ANSIBLE_ARGS="-K"`.
