@@ -48,6 +48,9 @@
     line: 'dtoverlay=ov5647'
   notify: Reboot Pi
 
+- name: Force reboot if hardware interfaces were just enabled
+  meta: flush_handlers
+
 - name: Verify I2C devices (PCA9685 and ADC) are present
   shell: i2cdetect -y 1
   register: i2c_scan
