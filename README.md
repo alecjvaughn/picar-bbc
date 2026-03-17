@@ -25,7 +25,8 @@ This project provides a client-server architecture for controlling the Freenove 
 If you are setting up a new Raspberry Pi for this project, follow these steps:
 
 ### 1. Install Operating System
-1.  Use Raspberry Pi Imager to flash **Raspberry Pi OS (64-bit)** (Bookworm or later) to your SD card.
+1.  Use Raspberry Pi Imager to flash **Raspberry Pi OS (64-bit)** to your SD card.
+    *   **⚠️ CRITICAL OS NOTE:** You must select the **Debian 12 "Bookworm" (64-bit)** release. Do *not* use the 32-bit version, and do *not* use the newer "Trixie" testing release. The `picamera2` library and Docker configuration used in this project are strictly bound to the Bookworm kernel. (In the Imager, look under "Raspberry Pi OS (Other)" to find the Bookworm 64-bit image).
 2.  In the Imager settings (gear icon), configure:
     -   **Hostname**: `picar`
     -   **SSH**: Enable with password authentication.

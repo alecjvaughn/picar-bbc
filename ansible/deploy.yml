@@ -50,8 +50,15 @@
         chdir: "{{ project_dir }}"
         target: docker-run-server
         params:
-          BUILD_ARGS: "{{ build_args | default('') }}"
+          BUILD_ARGS: "{{ build_args | default('') }} --progress=plain"
       become: false
+      async: 900
+      poll: 10
+      register: docker_build_out
+
+    - name: Display Docker Build Output
+      debug:
+        var: docker_build_out.stderr_lines
 
     - name: Build and Run Tunnel (Docker)
       community.general.make:
