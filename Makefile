@@ -79,7 +79,7 @@ help:
 	@echo ""
 	@echo "Deployment & Hardware:"
 	@echo "  make ansible-deploy      : Configure the Raspberry Pi and deploy the application"
-	@echo '                             (Optional: CLEAN=true or BUILD_ARGS="--build-arg CACHE_BUST=$$(date +%s)")'
+	@echo '                             (Optional: BRANCH=my-feature, CLEAN=true, BUILD_ARGS="...")'
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
 	@echo '                             (Optional: COMPONENT=<Led|Motor|Ultrasonic|Infrared|Servo|ADC|Buzzer|Camera|Battery|All-Motor|All-Non-Motor|All> [DURATION=60s])'
 	@echo "  make test-hardware       : Run hardware component tests (stops Python app, keeps container up)"
@@ -127,6 +127,7 @@ help-all:
 	@echo "Ansible Workflow:"
 	@echo "  make ansible-ping        : Ping the Raspberry Pi via Ansible"
 	@echo "  make ansible-deploy      : Run the Ansible playbook to configure/deploy"
+	@echo '                             (Optional: BRANCH=my-feature to deploy a specific branch)'
 	@echo '                             (Optional: CLEAN=true to nuke images/cache before deploy)'
 	@echo '                             (Optional: BUILD_ARGS="--build-arg CACHE_BUST=$$(date +%s)" to force apt update)'
 	@echo "  make ansible-test        : Run hardware tests via Ansible (COMPONENT=...) [RESTART=true]"
@@ -226,7 +227,12 @@ docker-build-client:
 
 docker-build: docker-build-server
 
-docker-build-all: docker-build-server docker-build-client
+docker-build-all: docker-build-server
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "🍓 Raspberry Pi detected. Skipping Client Docker build..."; \
+	else \
+		$(MAKE) docker-build-client; \
+	fi
 
 docker-rebuild:
 	$(MAKE) docker-build BUILD_ARGS="--no-cache"
@@ -390,6 +396,7 @@ ansible-deploy:
 		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
 		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
 		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
+		$(if $(BRANCH),-e "branch=$(BRANCH)") \
 		$(if $(BUILD_ARGS),-e "build_args='$(BUILD_ARGS)'") \
 		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
 		$(ANSIBLE_ARGS)
@@ -399,6 +406,7 @@ ansible-deploy:
 		$(if $(CLOUDFLARED_TUNNEL_TOKEN),-e "tunnel_token=$(CLOUDFLARED_TUNNEL_TOKEN)") \
 		$(if $(REPO_URL),-e "repo_url=$(REPO_URL)") \
 		$(if $(PROJECT_DIR),-e "project_dir=$(PROJECT_DIR)") \
+		$(if $(BRANCH),-e "branch=$(BRANCH)") \
 		$(if $(BUILD_ARGS),-e "build_args='$(BUILD_ARGS)'") \
 		$(if $(filter true,$(CLEAN)),-e "force_clean=true") \
 		$(ANSIBLE_ARGS)
@@ -439,8 +447,13 @@ ansible-nuke:
 .PHONY: clean-install install rebuild-hardware venv venv-cleanup run-server run-client clean-terminals clean-dev clean-test clean-tunnels dev-all
 
 clean-install:
-	rm -rf node_modules package-lock.json
-	npm install
+	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
+		echo "🍓 Raspberry Pi detected. Skipping Node.js client installation..."; \
+	else \
+		echo "🧹 Cleaning and reinstalling Node modules..."; \
+		rm -rf node_modules package-lock.json; \
+		npm install; \
+	fi
 	$(MAKE) venv-cleanup
 	$(MAKE) venv
 	. venv/bin/activate

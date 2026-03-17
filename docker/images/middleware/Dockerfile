@@ -6,12 +6,10 @@ FROM local/root_base:latest AS python_middleware
 ARG CACHE_BUST=1
 
 # 2. Install Runtime Dependencies
-# Install Python 3, pip, and venv (standard for Debian 12+)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Perform dist-upgrade to align with Pi OS before installing hardware libraries
+RUN apt-get update && apt-get dist-upgrade -y && apt-get install -y --no-install-recommends \
     # System & Build Tools
     build-essential \
-    ca-certificates \
-    curl \
     procps \
     # Python Core
     python3 \

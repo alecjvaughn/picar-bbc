@@ -6,15 +6,10 @@ FROM debian:bookworm-slim AS root_base
 # Bump this number to force Docker to pull the latest OS packages
 ARG CACHE_BUST=1
 
-# Update package lists and upgrade existing packages to fix CVEs
-RUN apt-get update && apt-get upgrade -y && \
-    # Install essential security certificates (needed for HTTPS/API calls)
+RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg && \
-    # Add Raspberry Pi Package Repository (Required for picamera2/libcamera)
     curl -fsSL https://archive.raspberrypi.org/debian/raspberrypi.gpg.key | gpg --dearmor -o /usr/share/keyrings/raspberrypi-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.gpg] http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list && \
-    apt-get update && apt-get dist-upgrade -y && \
-    # Clean up apt cache to keep image small
     rm -rf /var/lib/apt/lists/*
 
 # 3. Identity Management (Zero Trust)

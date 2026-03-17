@@ -17,8 +17,9 @@ COPY --chown=secureuser:pipeline src/Server /app/Server
 # Lib dependencies are installed via --system-site-packages in the virtual environment, so we don't need to copy them here. This keeps the image smaller and leverages Debian's package management for security updates.
 
 # 5. Runtime Configuration
-EXPOSE 5000
+EXPOSE 5050
 EXPOSE 8000
+EXPOSE 5001
 
 # 6. Runtime Configuration
 WORKDIR /app/Server

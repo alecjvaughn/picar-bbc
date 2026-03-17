@@ -97,6 +97,38 @@ Alternatively, you can use Ansible to automate the setup and deployment from you
     make ansible-deploy
     ```
 
+### 5. Deploying Feature Branches
+To deploy a specific branch to the Pi instead of `main`, pass the `BRANCH` argument to your deployment command:
+```bash
+make ansible-deploy BRANCH=my-feature-branch
+```
+*Note: If your branch includes changes to `requirements.txt` or `Dockerfile`, append `CLEAN=true` to force a complete rebuild without using cached layers.*
+
+### 6. Factory Reset & Manual Workflow
+If you want to completely wipe the Freenove application from the Pi (nuke Docker cache, containers, and source code) to start with a clean slate:
+```bash
+make ansible-nuke
+```
+OR - *to aggressively nuke all Docker containers, images, networks, and build cache*
+```bash
+docker system prune -a --volumes -f docker builder prune -a -f
+# Then remove the project directory
+cd ~ rm -rf path/to/picar-bbc
+```
+
+If you want to only provision the OS but run the Docker builds manually (to see real-time output instead of Ansible's background polling):
+1. Run the provision step only from your computer:
+   ```bash
+   ansible-playbook -i 'picar.local,' -u pi ansible/provision.yml
+   ```
+2. SSH into the Pi, clone the repo, and build manually:
+   ```bash
+   ssh pi@picar.local
+   git clone https://github.com/your-username/picar-bbc.git
+   cd picar-bbc
+   make docker-run-server BUILD_ARGS="--progress=plain"
+   ```
+
 ## Quick Start (Docker)
 
 The easiest way to run the application is using the provided `Makefile` and Docker.

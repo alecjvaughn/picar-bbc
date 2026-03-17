@@ -12,7 +12,7 @@
       git:
         repo: "{{ repo_url }}"
         dest: "{{ project_dir }}"
-        version: main
+        version: "{{ branch | default('main') }}"
         force: yes
       become: false
       ignore_errors: no
