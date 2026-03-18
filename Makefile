@@ -245,7 +245,7 @@ start-server-app:
 clear-leds:
 	@echo "🧹 Clearing LEDs..."
 	$(MAKE) stop-server-app
-	docker exec -u root $(SERVER_NAME) python3 test.py Led-Off
+	docker exec -u root $(SERVER_NAME) python3 Server/test.py Led-Off
 
 # --- Cleanup Commands ---
 
@@ -269,7 +269,7 @@ docker-prune: docker-down
 # Non-interactive test runner for automation/Ansible
 docker-run-test:
 	docker exec -u root $(SERVER_NAME) \
-		/bin/bash -c "timeout --signal=2 $${DURATION:-60s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
+		/bin/bash -c "timeout --signal=2 $${DURATION:-60s} python3 Server/test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then exit 0; else exit \$$err; fi"
 
 # `test` is the main entrypoint which aliases to `ansible-test`
 # `test-hardware` is for running tests directly on the Pi when SSH'd in.
@@ -283,7 +283,7 @@ test-hardware:
 	-$(MAKE) stop-server-app
 	@echo "🧪 Running hardware test for $(COMPONENT) inside $(SERVER_NAME)..."
 	-docker exec -it -u root $(SERVER_NAME) \
-		/bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
+		/bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 Server/test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
 	@if [ "$(RESTART)" = "true" ]; then \
 		echo "🔄 Restarting Python app in $(SERVER_NAME)..."; \
 		$(MAKE) start-server-app; \
@@ -297,7 +297,7 @@ test-exec:
 	fi
 	@echo "⚠️  Running test inside $(SERVER_NAME) alongside the ACTIVE Python app..."
 	@echo "    Note: This may conflict with the running Python application (e.g. Camera busy, LEDs overwriting)."
-	docker exec -u root -it $(SERVER_NAME) /bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
+	docker exec -u root -it $(SERVER_NAME) /bin/bash -c "timeout --signal=2 $${DURATION:-15s} python3 Server/test.py $(COMPONENT); err=\$$?; if [ \$$err -eq 124 ]; then echo -e '\n⏱️  Test finished (Timeout)'; exit 0; else exit \$$err; fi"
 
 test-unit:
 	@echo "🧪 Running backend unit tests..."
