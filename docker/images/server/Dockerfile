@@ -12,7 +12,7 @@ COPY --chown=secureuser:pipeline src/requirements.txt .
 RUN grep -v -e "opencv-python-headless" requirements.txt > requirements.tmp && pip install --no-cache-dir -r requirements.tmp && rm requirements.tmp
 
 # 4. Application Logic
-COPY --chown=secureuser:pipeline docker/images/server/docker-entrypoint.sh /usr/local/bin/
+COPY --chown=secureuser:pipeline docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY --chown=secureuser:pipeline src/Server /app/Server
 # COPY --chown=secureuser:pipeline src/Libs /app/Libs
