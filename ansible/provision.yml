@@ -4,6 +4,15 @@
   become: true
 
   tasks:
+    - name: Remove potentially conflicting Docker repository files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/keyrings/docker.asc
+      ignore_errors: yes # Ignore if files don't exist, which is normal on a fresh Pi
+
     - name: Update apt cache and upgrade packages
       apt:
         update_cache: yes
