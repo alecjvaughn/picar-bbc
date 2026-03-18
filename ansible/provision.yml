@@ -10,6 +10,16 @@
         upgrade: dist
         cache_valid_time: 3600
 
+    - name: Check if a reboot is required after system upgrade
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+
+    - name: Trigger reboot if required by system upgrade
+      command: /bin/true
+      notify: Reboot Pi
+      when: reboot_required_file.stat.exists
+
     - name: Install system dependencies
       apt:
         name:
@@ -29,38 +39,34 @@
           - libcamera-v4l2
         state: present
 
-    - name: Get libcamera library version
-      shell: "dpkg-query -W -f='${Version}' libcamera0.5 | cut -d'+' -f1 | cut -d'-' -f1"
-      register: libcamera_version
+    - name: Log all camera-related package versions for debugging
+      shell: dpkg -l | grep -E "libcamera|rpicam|picamera2" || true
+      register: camera_package_versions
       changed_when: false
       check_mode: no
 
-    - name: Fail if libcamera version is too old
-      fail:
-        msg: "Installed libcamera version ({{ libcamera_version.stdout }}) is older than the required v0.1.0. Please check your OS and package sources."
-      when: "libcamera_version.stdout is version('0.1.0', '<')"
+    - name: Display camera package versions
+      debug:
+        msg: "{{ camera_package_versions.stdout_lines }}"
 
-    - name: Get picamera2 library version
-      command: python3 -c "import picamera2; print(picamera2.__version__)"
-      register: picamera2_version
-      changed_when: false
-      check_mode: no
+    - name: Verify minimum versions of key packages
+      loop:
+        - { name: 'libcamera0.5', min_version: '0.1.0', command: "dpkg-query -W -f='${Version}' libcamera0.5 | cut -d'+' -f1 | cut -d'-' -f1" }
+        - { name: 'python3-picamera2', min_version: '0.11.0', command: "dpkg-query -W -f='${Version}' python3-picamera2 | cut -d'-' -f1" }
+        - { name: 'rpicam-apps', min_version: '1.5.0', command: "dpkg-query -W -f='${Version}' rpicam-apps | cut -d'-' -f1" }
+      loop_control:
+        loop_var: package
+      block:
+        - name: "Get {{ package.name }} version"
+          shell: "{{ package.command }}"
+          register: version_check
+          changed_when: false
+          check_mode: no
 
-    - name: Fail if picamera2 version is too old
-      fail:
-        msg: "Installed picamera2 version ({{ picamera2_version.stdout }}) is older than the required v0.11.0."
-      when: "picamera2_version.stdout is version('0.11.0', '<')"
-
-    - name: Get rpicam-apps version
-      shell: "dpkg-query -W -f='${Version}' rpicam-apps | cut -d'-' -f1"
-      register: rpicam_apps_version
-      changed_when: false
-      check_mode: no
-
-    - name: Fail if rpicam-apps version is too old
-      fail:
-        msg: "Installed rpicam-apps version ({{ rpicam_apps_version.stdout }}) is older than the required v1.5.0."
-      when: "rpicam_apps_version.stdout is version('1.5.0', '<')"
+        - name: "Fail if {{ package.name }} version is too old"
+          fail:
+            msg: "Installed {{ package.name }} version ({{ version_check.stdout }}) is older than required v{{ package.min_version }}."
+          when: "version_check.stdout is version(package.min_version, '<')"
 
     - name: Install Docker
       shell: curl -fsSL https://get.docker.com | sh

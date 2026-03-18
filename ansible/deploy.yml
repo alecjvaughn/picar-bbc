@@ -31,15 +31,6 @@
       become: false
       when: force_clean | default(false) | bool
 
-    - name: Reboot Pi to clear hardware locks (Clean or Cache Bust)
-      reboot:
-        msg: "Rebooting to clear hardware locks before fresh deployment"
-        connect_timeout: 5
-        reboot_timeout: 600
-        pre_reboot_delay: 0
-        post_reboot_delay: 30
-      when: (force_clean | default(false) | bool) or ('CACHE_BUST' in (build_args | default('')))
-
     - name: Record Build Start Time
       debug:
         msg: "Starting Docker build at {{ lookup('pipe', 'date') }}. This may take up to 1 hour on a fresh Pi..."
