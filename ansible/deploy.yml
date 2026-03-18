@@ -62,7 +62,7 @@
     - name: Save build log on failure
       copy:
         content: "{{ docker_build_out.stderr }}"
-        dest: "./docker/logs/docker_build_error-{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}.log"
+        dest: "./logs/docker_build_error-{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}.log"
       delegate_to: localhost
       when: docker_build_out.failed
 

@@ -7,6 +7,7 @@ video.jpg
 # Node & React Client
 node_modules/
 dist/
+logs/
 *.log
 
 # Python Server

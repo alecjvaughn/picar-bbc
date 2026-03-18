@@ -165,7 +165,9 @@ reboot: ansible-reboot
 # Docker Manual Workflow
 # ==============================================================================
 
-.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild create-network docker-run-server debug-server docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
+.PHONY: docker-build docker-build-root docker-build-middleware docker-build-server docker-build-client docker-build-all docker-rebuild docker-run-server debug-server docker-run-client docker-run-tunnel docker-up docker-down docker-clean docker-prune logs
+
+# --- Build Commands ---
 
 docker-build-root:
 	docker build $(BUILD_ARGS) -t $(ROOT_IMAGE) -f docker/images/root/Dockerfile .
@@ -191,18 +193,43 @@ docker-build-all: docker-build-server
 docker-rebuild:
 	$(MAKE) docker-build BUILD_ARGS="--no-cache"
 
-create-network:
-	docker network create $(NETWORK_NAME) 2>/dev/null || true
+# --- Run Commands ---
 
 docker-run-server:
 	@echo "🚀 Building and starting server with Docker Compose..."
-	docker compose up -d --build server
+	docker compose up -d --build --force-recreate server
+
+docker-run-client: docker-build-client
+	@echo "🚀 Building and starting client with Docker Compose..."
+	docker compose up -d --build --force-recreate client
+
+docker-run-tunnel:
+	@if [ -z "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
+		echo "Error: CLOUDFLARED_TUNNEL_TOKEN is not set. Usage: make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=<your-token>"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting tunnel service with Docker Compose..."
+	docker compose --profile tunnel up -d --force-recreate
+
+docker-up: docker-run-server
+
+# --- Container Management ---
+
+docker-down:
+	docker compose down
+
+logs:
+	docker logs -f $(SERVER_NAME)
 
 debug-server: docker-build
 	@echo "Cleaning up old debug container..."
 	-docker rm -f $(DEBUG_SERVER_NAME) 2>/dev/null || true
 	@echo "Starting server in debug mode (foreground)..."
+	@# We use 'docker run' here for a simple, interactive foreground session,
+	@# which is more direct than managing it via docker-compose.
+	docker network create $(NETWORK_NAME) 2>/dev/null || true
 	docker run --privileged --name $(DEBUG_SERVER_NAME) \
+		--network $(NETWORK_NAME) \
 		-u root \
 		$(PORTS) \
 		$(SERVER_IMAGE)
@@ -220,25 +247,7 @@ clear-leds:
 	$(MAKE) stop-server-app
 	docker exec -u root $(SERVER_NAME) python3 test.py Led-Off
 
-docker-run-client: docker-build-client
-	@echo "Starting web client on http://localhost:3000..."
-	-docker rm -f $(CLIENT_NAME) 2>/dev/null || true
-	docker run --rm -d --name $(CLIENT_NAME) \
-		-p 3000:80 \
-		$(CLIENT_IMAGE)
-
-docker-run-tunnel:
-	@if [ -z "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
-		echo "Error: CLOUDFLARED_TUNNEL_TOKEN is not set. Usage: make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=<your-token>"; \
-		exit 1; \
-	fi
-	@echo "🚀 Starting tunnel service with Docker Compose..."
-	docker compose --profile tunnel up -d
-
-docker-up: docker-run-server
-
-docker-down:
-	docker compose down
+# --- Cleanup Commands ---
 
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
@@ -250,9 +259,6 @@ docker-prune: docker-down
 	docker container prune -f
 	docker image prune -f
 	docker network prune -f
-
-logs:
-	docker logs -f $(SERVER_NAME)
 
 # ==============================================================================
 # Testing Workflow

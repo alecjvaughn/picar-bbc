@@ -36,3 +36,12 @@ services:
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN}
     command: cloudflared tunnel run
+
+  client:
+    container_name: picar-client
+    image: ${CLIENT_IMAGE:-local/picar-client:latest}
+    build:
+      context: .
+      dockerfile: docker/images/client/Dockerfile
+    ports:
+      - "3000:80"
