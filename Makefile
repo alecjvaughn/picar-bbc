@@ -196,7 +196,7 @@ create-network:
 
 docker-run-server:
 	@echo "🚀 Building and starting server with Docker Compose..."
-	docker-compose up -d --build server
+	docker compose up -d --build server
 
 debug-server: docker-build
 	@echo "Cleaning up old debug container..."
@@ -233,12 +233,12 @@ docker-run-tunnel:
 		exit 1; \
 	fi
 	@echo "🚀 Starting tunnel service with Docker Compose..."
-	docker-compose --profile tunnel up -d
+	docker compose --profile tunnel up -d
 
 docker-up: docker-run-server
 
 docker-down:
-	docker-compose down
+	docker compose down
 
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
