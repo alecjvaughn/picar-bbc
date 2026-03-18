@@ -20,7 +20,47 @@
           - i2c-tools
           - python3-pip
           - python3-venv
+          - python3-opencv
+          - libcamera-tools
+          - gstreamer1.0-libcamera
+          - gstreamer1.0-plugins-base
+          - gstreamer1.0-plugins-good
+          - python3-picamera2
+          - libcamera-v4l2
         state: present
+
+    - name: Get libcamera library version
+      shell: "dpkg-query -W -f='${Version}' libcamera0.5 | cut -d'+' -f1 | cut -d'-' -f1"
+      register: libcamera_version
+      changed_when: false
+      check_mode: no
+
+    - name: Fail if libcamera version is too old
+      fail:
+        msg: "Installed libcamera version ({{ libcamera_version.stdout }}) is older than the required v0.1.0. Please check your OS and package sources."
+      when: "libcamera_version.stdout is version('0.1.0', '<')"
+
+    - name: Get picamera2 library version
+      command: python3 -c "import picamera2; print(picamera2.__version__)"
+      register: picamera2_version
+      changed_when: false
+      check_mode: no
+
+    - name: Fail if picamera2 version is too old
+      fail:
+        msg: "Installed picamera2 version ({{ picamera2_version.stdout }}) is older than the required v0.11.0."
+      when: "picamera2_version.stdout is version('0.11.0', '<')"
+
+    - name: Get rpicam-apps version
+      shell: "dpkg-query -W -f='${Version}' rpicam-apps | cut -d'-' -f1"
+      register: rpicam_apps_version
+      changed_when: false
+      check_mode: no
+
+    - name: Fail if rpicam-apps version is too old
+      fail:
+        msg: "Installed rpicam-apps version ({{ rpicam_apps_version.stdout }}) is older than the required v1.5.0."
+      when: "rpicam_apps_version.stdout is version('1.5.0', '<')"
 
     - name: Install Docker
       shell: curl -fsSL https://get.docker.com | sh
@@ -39,6 +79,28 @@
     - name: Configure Raspberry Pi Interfaces
       include_tasks: configure_pi.yml
       ignore_errors: yes
+
+    - name: Verify rpicam software installation
+      command: rpicam-hello --version
+      register: rpicam_version_check
+      changed_when: false
+      failed_when: false # We will handle failure manually in the next task
+
+    - name: Fail if rpicam tools are not installed correctly
+      fail:
+        msg: "rpicam verification failed. 'rpicam-hello --version' did not execute successfully. Please check OS compatibility (Debian Bookworm 64-bit) and ensure 'rpicam-apps' is installed."
+      when: rpicam_version_check.rc != 0
+
+    - name: Verify camera hardware is detected
+      command: rpicam-hello --list-cameras
+      register: camera_detection_check
+      changed_when: false
+      failed_when: false # We will handle failure manually in the next task
+
+    - name: Fail if no camera hardware is detected
+      fail:
+        msg: "Camera hardware not detected. 'rpicam-hello --list-cameras' reported no available cameras. Please check the camera connection and ensure it is enabled in raspi-config or /boot/firmware/config.txt."
+      when: camera_detection_check.rc != 0 or 'No cameras available!' in camera_detection_check.stdout
 
   handlers:
     - name: Reboot Pi

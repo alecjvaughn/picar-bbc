@@ -68,9 +68,12 @@
       retries: 360
       delay: 10
 
-    - name: Display Docker Build Output
-      debug:
-        var: docker_build_out.stderr_lines
+    - name: Save build log on failure
+      copy:
+        content: "{{ docker_build_out.stderr }}"
+        dest: "./docker/logs/docker_build_error-{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}.log"
+      delegate_to: localhost
+      when: docker_build_out.failed
 
     - name: Record Build End Time
       debug:
@@ -94,7 +97,7 @@
 
     - name: Verify API is responsive and hardware is online
       uri:
-        url: "http://localhost:5050/status"
+        url: "http://localhost:5001/api/status"
         method: GET
         return_content: yes
       register: api_status
@@ -112,7 +115,7 @@
       fail:
         msg: >
           The API did not become healthy after deployment. It is not responding correctly at http://localhost:5050/status or the hardware is not online.
-          Last response (status {{ api_status.status }}): {{ api_status.content | default('No content') }}
+          Last response (status {{ api_status.status }}): {{ api_status.content | default('(No content received)') }}
       when: >
         api_status.failed or
         not (

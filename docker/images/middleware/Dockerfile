@@ -6,8 +6,8 @@ FROM local/root_base:latest AS python_middleware
 ARG CACHE_BUST=1
 
 # 2. Install Runtime Dependencies
-# Perform dist-upgrade to align with Pi OS before installing hardware libraries
-RUN apt-get update && apt-get dist-upgrade -y && apt-get install -y --no-install-recommends \
+# Perform full-upgrade to align with Pi OS before installing hardware libraries
+RUN apt-get update && apt-get full-upgrade -y && apt-get install -y --no-install-recommends \
     # System & Build Tools
     build-essential \
     procps \
