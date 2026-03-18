@@ -172,14 +172,10 @@ class TCPServer:
         # Get a list of IP addresses of connected clients
         return [addr[0] for addr in self.client_sockets.values()]
 
-def get_interface_ip():
-    # Get the IP address of the specified network interface
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    return socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s', b'wlan0'[:15]))[20:24])
-
 if __name__ == "__main__":
     server = TCPServer()
-    ip = get_interface_ip()
+    # Listen on all available network interfaces, which is standard for containerized services.
+    ip = '0.0.0.0'
     port = 12345
     server.start(ip, port)
 

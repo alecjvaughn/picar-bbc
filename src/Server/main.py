@@ -48,10 +48,8 @@ import multiprocessing
 from message import Message_Parse
 from command import Command
 from led import Led
-from camera import Camera
 from car import Car
 from buzzer import Buzzer
-from Thread import stop_thread
 from threading import Thread
 
 class PiCarServer:
@@ -64,14 +62,12 @@ class PiCarServer:
             self.led.colorBlink(0)
         self.car = Car()
         self.buzzer = Buzzer()
-        self.camera = Camera(stream_size=(400, 300))
         self.queue_cmd = multiprocessing.Queue()
         self.cmd_parse = Message_Parse()
         self.queue_led = multiprocessing.Queue()
         self.led_parse = Message_Parse()
 
         self.cmd_thread = None
-        self.video_thread = None
         self.car_thread = None
         self.led_process = None
         self.action_process = None
@@ -89,14 +85,11 @@ class PiCarServer:
 
     def stop_car(self):
         self.led.colorBlink(0)
-        self.camera.stop_stream()
-        self.camera.close()
         self.car.close()
 
     def start(self):
         self.tcp_server.start_tcp_servers()
         self.set_threading_cmd_receive(True)
-        self.set_threading_video_send(True)
         self.set_threading_car_task(True)
         self.set_process_led_running(True)
 
@@ -297,40 +290,6 @@ class PiCarServer:
                 self.send_sonic_data()
             time.sleep(0.01)
 
-
-    def set_threading_video_send(self, state, close_time=0.3):
-        if self.video_thread is None:
-            buf_state = False
-        else:
-            buf_state = self.video_thread.is_alive()
-        if state != buf_state:
-            if state:
-                self.video_thread_is_running = True
-                self.video_thread = threading.Thread(target=self.threading_video_send)
-                self.video_thread.start()
-            else:
-                self.video_thread_is_running = False
-                if self.video_thread is not None:
-                    self.video_thread.join(close_time)
-                    self.video_thread = None
-
-    def threading_video_send(self):
-        while self.video_thread_is_running:
-            if self.tcp_server.is_video_server_connected():
-                self.camera.start_stream()
-                while self.tcp_server.is_video_server_connected():
-                    frame = self.camera.get_frame()
-                    lenFrame = len(frame)
-                    lengthBin = struct.pack('<I', lenFrame)
-                    try:
-                        self.tcp_server.send_data_to_video_client(lengthBin)
-                        self.tcp_server.send_data_to_video_client(frame)
-                    except:
-                        break
-                self.camera.stop_stream()
-            else:
-                time.sleep(0.1)
-
     def set_process_led_running(self, state, close_time=0.3):
         if self.led_process is None:
             buf_state = False
@@ -401,7 +360,6 @@ class PiCarServer:
 
     def stop(self):
         self.set_threading_cmd_receive(False)
-        self.set_threading_video_send(False)
         self.set_threading_car_task(False)
         self.set_process_led_running(False)
         if self.tcp_server:
@@ -410,8 +368,6 @@ class PiCarServer:
         self.stop_car()
         if self.cmd_thread and self.cmd_thread.is_alive():
             self.cmd_thread.join(0.1)
-        if self.video_thread and self.video_thread.is_alive():
-            self.video_thread.join(0.1)
         if self.car_thread and self.car_thread.is_alive():
             self.car_thread.join(0.1)
         if self.led_process and self.led_process.is_alive():

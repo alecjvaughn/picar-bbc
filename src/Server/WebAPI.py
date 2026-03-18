@@ -7,9 +7,19 @@ import socket
 import sys
 import os
 import uvicorn
-import struct
 import asyncio
 from datetime import datetime
+import io
+import threading
+
+# Mock hardware for local dev, but attempt to import real hardware on Pi
+try:
+    from picamera2 import Picamera2
+    from picamera2.encoders import MjpegEncoder
+    from picamera2.outputs import FileOutput
+except ImportError:
+    print("Warning: picamera2 not found. Video streaming will be disabled.")
+    Picamera2 = None
 
 # Ensure we can import from sibling directories to get Command definitions
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -41,7 +51,6 @@ app.add_middleware(
 # Configuration to match the existing TCP Server
 TCP_IP = '127.0.0.1'
 TCP_PORT = 5050
-VIDEO_PORT = 8080
 INTERVAL_CHAR = '#'
 END_CHAR = '\n'
 
@@ -58,6 +67,33 @@ def app_log(msg: str):
     log_buffer.append(log_entry)
     if len(log_buffer) > 100:
         log_buffer.pop(0)
+
+# --- Camera Streaming Setup ---
+# This setup will run once when the API starts.
+picam2 = None
+if Picamera2:
+    try:
+        picam2 = Picamera2()
+        # Using a smaller size for streaming to reduce latency and bandwidth
+        video_config = picam2.create_video_configuration(main={"size": (640, 480)})
+        picam2.configure(video_config)
+
+        class StreamingOutput(io.BufferedIOBase):
+            def __init__(self):
+                self.frame = None
+                self.condition = threading.Condition()
+
+            def write(self, buf):
+                with self.condition:
+                    self.frame = buf
+                    self.condition.notify_all()
+
+        output = StreamingOutput()
+        picam2.start_recording(MjpegEncoder(), FileOutput(output))
+        app_log("✅ Picamera2 MJPEG stream started.")
+    except Exception as e:
+        app_log(f"⚠️ Picamera2 streaming failed to start: {e}")
+        picam2 = None # Ensure picam2 is None if it failed
 
 def send_command(command_str: str) -> bool:
     """Sends a raw command string to the local TCP server."""
@@ -120,40 +156,20 @@ async def logs_stream():
             await asyncio.sleep(0.5)
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-def recvall(sock, count):
-    """Helper function to reliably receive exactly `count` bytes from a socket."""
-    buf = b''
-    while count:
-        newbuf = sock.recv(count)
-        if not newbuf: return None
-        buf += newbuf
-        count -= len(newbuf)
-    return buf
-
 def video_stream_generator():
-    """Connects to the local raw TCP video server and yields MJPEG HTTP frames."""
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        client_socket.connect((TCP_IP, VIDEO_PORT))
-        while True:
-            # Read the 4-byte length header
-            length_bytes = recvall(client_socket, 4)
-            if not length_bytes:
-                break
-            
-            # Unpack the length and read the exact number of JPEG bytes
-            length = struct.unpack('<I', length_bytes)[0]
-            frame = recvall(client_socket, length)
-            if not frame:
-                break
-                
-            # Yield the frame in the standard MJPEG multipart format
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-    except Exception as e:
-        print(f"Video Stream Error: {e}")
-    finally:
-        client_socket.close()
+    """Streams from the Picamera2's MJPEG encoder buffer."""
+    if not picam2:
+        app_log("ERROR: Video stream requested but Picamera2 is not available.")
+        # In a real app, you might yield a placeholder "camera offline" image here.
+        return
+
+    global output
+    while True:
+        with output.condition:
+            output.condition.wait()
+            frame = output.frame
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
 @app.get('/api/status', tags=["System"])
 def status():
@@ -199,6 +215,8 @@ def move_control(req: MoveRequest):
 @app.get('/api/video_feed', tags=["Video"])
 def video_feed():
     """Streams the camera feed as MJPEG."""
+    if not picam2:
+        raise HTTPException(status_code=503, detail="Camera service is not available.")
     return StreamingResponse(video_stream_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.post('/api/servo', tags=["Servos"])
