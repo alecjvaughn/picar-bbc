@@ -33,6 +33,8 @@
   changed_when: false
   check_mode: no # Always run this to get the model, even in check mode
 
+# The onboard audio on older Pi models can conflict with some PWM/GPIO hardware.
+# This is not an issue on Pi 4/5, so we only apply this on older models.
 - name: Blacklist onboard audio kernel module (for older Pis)
   ansible.builtin.lineinfile:
     path: /etc/modprobe.d/snd-blacklist.conf
@@ -47,15 +49,6 @@
     regexp: '^dtoverlay=ov5647'
     line: 'dtoverlay=ov5647'
   notify: Reboot Pi
-
-- name: Force reboot if hardware interfaces were just enabled
-  meta: flush_handlers
-
-- name: Verify I2C devices (PCA9685 and ADC) are present
-  shell: i2cdetect -y 1
-  register: i2c_scan
-  changed_when: false
-  failed_when: "'40' not in i2c_scan.stdout or '48' not in i2c_scan.stdout"
 
 - name: Disable onboard audio in boot config (for older Pis)
   ansible.builtin.lineinfile:

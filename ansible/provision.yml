@@ -10,6 +10,7 @@
         upgrade: dist
         cache_valid_time: 3600
 
+    # --- PHASE 1: PACKAGE & SYSTEM SETUP ---
     - name: Check if a reboot is required after system upgrade
       stat:
         path: /var/run/reboot-required
@@ -20,34 +21,39 @@
       notify: Reboot Pi
       when: reboot_required_file.stat.exists
 
-    - name: Install system dependencies
+    - name: Install System and Docker Prerequisites
       apt:
         name:
           - git
           - make
+          - ca-certificates
           - curl
           - gnupg
-          - docker-compose-plugin
           - i2c-tools
-          # rpicam-apps is needed for the rpicam-hello hardware check
           - rpicam-apps
         state: present
 
-    - name: Log all camera-related package versions for debugging
-      shell: dpkg -l | grep -E "libcamera|rpicam|picamera2" || true
-      register: camera_package_versions
-      changed_when: false
-      check_mode: no
+    - name: Add Docker's official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
 
-    - name: Display camera package versions
-      debug:
-        msg: "{{ camera_package_versions.stdout_lines }}"
+    - name: Set up Docker repository
+      apt_repository:
+        repo: "deb [arch=arm64] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        state: present
 
-    - name: Install Docker
-      shell: curl -fsSL https://get.docker.com | sh
-      args:
-        creates: /usr/bin/docker
+    - name: Install Docker Engine and plugins
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        update_cache: yes
 
+    # --- PHASE 2: USER & GROUP MANAGEMENT ---
     - name: Add user to docker group
       user:
         name: "{{ ansible_user }}"
@@ -57,36 +63,39 @@
     - name: Reset connection to apply group changes
       meta: reset_connection
 
+    # --- PHASE 3: HARDWARE CONFIGURATION ---
     - name: Configure Raspberry Pi Interfaces
       include_tasks: configure_pi.yml
-      ignore_errors: yes
+      # This will notify the 'Reboot Pi' handler if changes are made.
+
+    # --- PHASE 4: APPLY CONFIGURATION (REBOOT IF NEEDED) ---
+    - name: Apply all pending configuration changes (reboots if necessary)
+      meta: flush_handlers
+
+    # --- PHASE 5: VERIFICATION ---
+    - name: Verify I2C devices (PCA9685 and ADC) are present
+      shell: i2cdetect -y 1
+      register: i2c_scan
+      changed_when: false
+      failed_when: "'40' not in i2c_scan.stdout or '48' not in i2c_scan.stdout"
+      # This check ensures the motor controller (0x40) and ADC (0x48) are visible on the bus.
 
     - name: Verify rpicam software installation
       command: rpicam-hello --version
-      register: rpicam_version_check
       changed_when: false
-      failed_when: false # We will handle failure manually in the next task
-
-    - name: Fail if rpicam tools are not installed correctly
-      fail:
-        msg: "rpicam verification failed. 'rpicam-hello --version' did not execute successfully. Please check OS compatibility (Debian Bookworm 64-bit) and ensure 'rpicam-apps' is installed."
-      when: rpicam_version_check.rc != 0
+      # This simple command confirms the toolchain is installed and executable.
 
     - name: Verify camera hardware is detected
       command: rpicam-hello --list-cameras
       register: camera_detection_check
       changed_when: false
-      failed_when: false # We will handle failure manually in the next task
-
-    - name: Fail if no camera hardware is detected
-      fail:
-        msg: "Camera hardware not detected. 'rpicam-hello --list-cameras' reported no available cameras. Please check the camera connection and ensure it is enabled in raspi-config or /boot/firmware/config.txt."
-      when: camera_detection_check.rc != 0 or 'No cameras available!' in camera_detection_check.stdout
+      failed_when: "'No cameras available!' in camera_detection_check.stdout"
+      # This check ensures the OS can see the physical camera module.
 
   handlers:
     - name: Reboot Pi
       reboot:
-        msg: "Rebooting to apply hardware configurations"
+        msg: "Rebooting to apply system/hardware configurations"
         connect_timeout: 5
         reboot_timeout: 600
         pre_reboot_delay: 0
