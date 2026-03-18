@@ -70,15 +70,6 @@
       debug:
         msg: "Docker build completed at {{ lookup('pipe', 'date') }}."
 
-    - name: Build and Run Tunnel (Docker)
-      community.general.make:
-        chdir: "{{ project_dir }}"
-        target: docker-run-tunnel
-      become: false
-      environment:
-        CLOUDFLARED_TUNNEL_TOKEN: "{{ tunnel_token }}"
-      when: tunnel_token | length > 0
-
     - name: Verify Server Container is Running
       command: docker inspect -f '{{ "{{" }}.State.Status{{ "}}" }}' picar-server
       register: container_status
@@ -105,7 +96,7 @@
     - name: Fail if API is not healthy
       fail:
         msg: >
-          The API did not become healthy after deployment. It is not responding correctly at http://localhost:5050/status or the hardware is not online.
+          The API did not become healthy after deployment. It is not responding correctly at http://localhost:5001/api/status or the hardware is not online.
           Last response (status {{ api_status.status }}): {{ api_status.content | default('(No content received)') }}
       when: >
         api_status.failed or
@@ -113,3 +104,40 @@
           '"hardware_online": true' in api_status.content or
           '"hardware": "online"' in api_status.content
         )
+
+    - name: Build and Run Tunnel (Docker)
+      community.general.make:
+        chdir: "{{ project_dir }}"
+        target: docker-run-tunnel
+      become: false
+      environment:
+        CLOUDFLARED_TUNNEL_TOKEN: "{{ tunnel_token }}"
+      when: tunnel_token | length > 0
+      async: 300
+      poll: 0
+      register: docker_tunnel_async
+
+    - name: Wait for tunnel creation to complete
+      async_status:
+        jid: "{{ docker_tunnel_async.ansible_job_id }}"
+      become: false
+      register: docker_tunnel_out
+      until: docker_tunnel_out.finished
+      retries: 30 # 30 * 10s = 5 minutes
+      delay: 10
+      when: tunnel_token | length > 0 and docker_tunnel_async.ansible_job_id is defined
+
+    - name: Save tunnel log on failure
+      copy:
+        content: "{{ docker_tunnel_out.stderr }}"
+        dest: "./logs/docker_tunnel_error-{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}.log"
+      delegate_to: localhost
+      when: tunnel_token | length > 0 and docker_tunnel_out.failed
+
+    - name: Verify Tunnel Container is Running
+      command: docker inspect -f '{{ "{{" }}.State.Status{{ "}}" }}' picar-tunnel
+      register: tunnel_container_status
+      until: tunnel_container_status.stdout == "running"
+      retries: 5
+      delay: 2
+      when: tunnel_token | length > 0

@@ -209,7 +209,7 @@ docker-run-tunnel:
 		exit 1; \
 	fi
 	@echo "🚀 Starting tunnel service with Docker Compose..."
-	docker compose --profile tunnel up -d --force-recreate
+	docker compose up -d --force-recreate --no-build tunnel # Start tunnel, but don't build anything else
 
 docker-up: docker-run-server
 
