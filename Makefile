@@ -27,7 +27,7 @@ CLIENT_IMAGE     := local/picar-client:latest
 
 # Networking
 NETWORK_NAME := picar-net
-PORTS        := -p 5050:5050 -p 8080:8080 -p 5001:5001
+PORTS        := -p 5050:5050 -p 5001:5001
 
 # Configuration
 CLOUDFLARED_TUNNEL_TOKEN ?=
@@ -194,22 +194,9 @@ docker-rebuild:
 create-network:
 	docker network create $(NETWORK_NAME) 2>/dev/null || true
 
-docker-run-server: docker-build create-network
-	-docker rm -f $(SERVER_NAME) 2>/dev/null || true
-	@# Aggressively kill anything on ports 5050/8080 (use with caution)
-	-sudo fuser -k 5050/tcp 2>/dev/null || true
-	-sudo fuser -k 8080/tcp 2>/dev/null || true
-	-sudo fuser -k 5001/tcp 2>/dev/null || true
-	docker run --rm -d --name $(SERVER_NAME) \
-		--network $(NETWORK_NAME) \
-		--privileged \
-		-u root \
-		-v /dev/shm:/dev/shm \
-		-v /tmp:/tmp \
-		-v /run/udev:/run/udev:ro \
-		$(PORTS) \
-		$(SERVER_IMAGE) \
-		/bin/bash -c "python3 main.py --no-gui & python3 WebAPI.py"
+docker-run-server:
+	@echo "🚀 Building and starting server with Docker Compose..."
+	docker-compose up -d --build server
 
 debug-server: docker-build
 	@echo "Cleaning up old debug container..."
@@ -240,22 +227,18 @@ docker-run-client: docker-build-client
 		-p 3000:80 \
 		$(CLIENT_IMAGE)
 
-docker-run-tunnel: docker-build create-network
+docker-run-tunnel:
 	@if [ -z "$(CLOUDFLARED_TUNNEL_TOKEN)" ]; then \
 		echo "Error: CLOUDFLARED_TUNNEL_TOKEN is not set. Usage: make docker-run-tunnel CLOUDFLARED_TUNNEL_TOKEN=<your-token>"; \
 		exit 1; \
 	fi
-	-docker rm -f $(TUNNEL_NAME) 2>/dev/null || true
-	docker run -d --name $(TUNNEL_NAME) --restart unless-stopped \
-		--network $(NETWORK_NAME) \
-		-e TUNNEL_TOKEN=$(CLOUDFLARED_TUNNEL_TOKEN) \
-		$(SERVER_IMAGE) cloudflared tunnel run
+	@echo "🚀 Starting tunnel service with Docker Compose..."
+	docker-compose --profile tunnel up -d
 
 docker-up: docker-run-server
 
 docker-down:
-	docker stop $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) $(TUNNEL_NAME) || true
-	docker rm $(SERVER_NAME) $(CLIENT_NAME) $(DEBUG_SERVER_NAME) $(TUNNEL_NAME) || true
+	docker-compose down
 
 docker-clean: docker-down
 	docker rmi $(SERVER_IMAGE) $(CLIENT_IMAGE) $(MIDDLEWARE_IMAGE) $(ROOT_IMAGE) || true
@@ -437,7 +420,7 @@ rebuild-hardware:
 venv:
 	@if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then \
 		echo "Raspberry Pi detected. Installing system dependencies..."; \
-		sudo apt-get update && sudo apt-get install -y python3-dev python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-picamera2; \
+		sudo apt update && sudo apt install -y python3-dev python3-numpy python3-gpiozero python3-opencv libcamera-tools gstreamer1.0-libcamera gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-picamera2; \
 		test -d venv || python3 -m venv venv --system-site-packages; \
 	else \
 		test -d venv || python3 -m venv venv; \

@@ -1,0 +1,40 @@
+version: '3.8'
+
+networks:
+  picar-net:
+    driver: bridge
+
+services:
+  server:
+    container_name: picar-server
+    image: ${SERVER_IMAGE:-local/picar-server:latest}
+    build:
+      context: .
+      dockerfile: docker/images/server/Dockerfile
+      args:
+        - ${BUILD_ARGS}
+    networks:
+      - picar-net
+    privileged: true
+    user: root
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+      - "5001:5001"
+    volumes:
+      - /dev/shm:/dev/shm
+      - /tmp:/tmp
+      - /run/udev:/run/udev:ro
+
+  tunnel:
+    profiles: ["tunnel"]
+    container_name: picar-tunnel
+    image: ${SERVER_IMAGE:-local/picar-server:latest}
+    restart: unless-stopped
+    networks:
+      - picar-net
+    depends_on:
+      - server
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN}
+    command: cloudflared tunnel run

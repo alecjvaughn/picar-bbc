@@ -139,19 +139,19 @@ If your computer and the Raspberry Pi are on the same network, you can connect d
 
 - **Hostname**: `picar.local` (Assuming you followed the README setup)
 - **Control Port (TCP)**: `5000`
-- **Video Stream (MJPEG)**: `8080`
+- **Web API Port**: `5001`
 
 **URLs**:
-- Control API: `http://picar.local:5050`
-- Video Feed: `http://picar.local:8080`
+- Control API: `http://picar.local:5001/api/`
+- Video Feed: `http://picar.local:5001/api/video_feed`
 
-*(If `picar.local` doesn't work, find your Pi's IP address using `hostname -I` on the Pi and use that instead, e.g., `http://192.168.1.15:5050`)*
+*(If `picar.local` doesn't work, find your Pi's IP address using `hostname -I` on the Pi and use that instead, e.g., `http://192.168.1.15:5001`)*
 
 ### 2. Remote Access (Cloudflare Tunnel)
 If you have deployed with a Cloudflare Tunnel token, you can access the robot from anywhere on the internet.
 
 - **URL**: This is the Public Hostname you configured in your Cloudflare Zero Trust Dashboard (e.g., `https://robot.yourdomain.com`).
-- **Configuration**: The Ansible playbook automatically configures the tunnel. Ensure your Cloudflare Tunnel "Service" points to `http://picar-server:8080` (for video) or `http://picar-server:5050` (for control).
+- **Configuration**: The Ansible playbook automatically configures the tunnel. Ensure your Cloudflare Tunnel "Service" points to `http://picar-server:5001` to access the Web API and video stream.
 
 ### 3. Using the Web Client
 To control the robot using the web interface:
