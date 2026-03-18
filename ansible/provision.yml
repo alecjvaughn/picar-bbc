@@ -27,16 +27,10 @@
           - make
           - curl
           - gnupg
+          - docker-compose-plugin
           - i2c-tools
-          - python3-pip
-          - python3-venv
-          - python3-opencv
-          - libcamera-tools
-          - gstreamer1.0-libcamera
-          - gstreamer1.0-plugins-base
-          - gstreamer1.0-plugins-good
-          - python3-picamera2
-          - libcamera-v4l2
+          # rpicam-apps is needed for the rpicam-hello hardware check
+          - rpicam-apps
         state: present
 
     - name: Log all camera-related package versions for debugging
