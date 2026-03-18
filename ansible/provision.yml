@@ -31,34 +31,18 @@
           - gnupg
           - i2c-tools
           - rpicam-apps
-        state: present
-
-    - name: Create directory for apt keyrings
-      file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
-
-    - name: Add Docker's official GPG key
-      get_url:
-        url: https://download.docker.com/linux/debian/gpg
-        dest: /etc/apt/keyrings/docker.asc
-        mode: '0644'
-
-    - name: Set up Docker repository
-      apt_repository:
-        repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
-        state: present
-
-    - name: Install Docker Engine and plugins
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
           - docker-compose-plugin
-        update_cache: yes
+        state: present
+
+    - name: Install Docker via convenience script
+      shell: curl -fsSL https://get.docker.com | sh
+      args:
+        # This ensures the task is idempotent and doesn't run if docker is already installed
+        creates: /usr/bin/docker
+
+    - name: Verify Docker Compose plugin is installed
+      command: docker compose version
+      changed_when: false
 
     # --- PHASE 2: USER & GROUP MANAGEMENT ---
     - name: Add user to docker group
